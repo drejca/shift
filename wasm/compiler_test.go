@@ -2,7 +2,7 @@ package wasm
 
 import (
 	"github.com/drejca/shiftlang/assert"
-	"github.com/drejca/shiftlang/life/exec"
+	"github.com/perlin-network/life/exec"
 	"github.com/drejca/shiftlang/parser"
 	"strings"
 	"testing"
@@ -34,14 +34,14 @@ fn Get() : i32 {
 func TestFunctionWithVm(t *testing.T) {
 	input := `
 fn Get() : i32 {
-	return 5;
+	return 10;
 }
 `
 	p := parser.New(strings.NewReader(input))
 	program := p.Parse()
 
-	compiler := New(program)
-	compiler.Compile()
+	compiler := New()
+	compiler.Compile(program)
 
 	vm, err := exec.NewVirtualMachine(compiler.Bytes(), exec.VMConfig{}, &exec.NopResolver{}, nil)
 	if err != nil {
@@ -57,7 +57,9 @@ fn Get() : i32 {
 	if err != nil {
 		panic(err)
 	}
-	if ret != 5 {
-		t.Errorf("expected %d but got %d", 5, ret)
+
+	expect := int64(10)
+	if ret != expect {
+		t.Errorf("expected %d but got %d", expect, ret)
 	}
 }
