@@ -1,0 +1,7 @@
+github.com/go-interpreter/wagon v0.3.0 h1:3/Qe83Gha2D7xcs33s/f15QPB0MYClDeZHj6pOSWa6g=
+github.com/go-interpreter/wagon v0.3.0/go.mod h1:zHOMvbitcZek8oshsMO5VpyBjWjV9X8cn8WTZwdebpM=
+github.com/perlin-network/life v0.0.0-20190204091834-d05763d11050 h1:RVTDtMjSRp5M+Kns410nqtyUuoVKExgS0xgrh+9WGZc=
+github.com/perlin-network/life v0.0.0-20190204091834-d05763d11050/go.mod h1:fETv2DiCvuXiTsRHgPs2XQBvWqRGvnc59ZhCw9AtFA4=
+github.com/perlin-network/wagon v0.3.1-0.20180825141017-f8cb99b55a39 h1:CYHXy6CWxxL7ugjvCbTELOm2j5iRLEWGPl3AQYvretw=
+github.com/perlin-network/wagon v0.3.1-0.20180825141017-f8cb99b55a39/go.mod h1:zHOMvbitcZek8oshsMO5VpyBjWjV9X8cn8WTZwdebpM=
+golang.org/x/tools v0.0.0-20180917221912-90fa682c2a6e/go.mod h1:n7NCudcB/nEzxVGmLbDWY5pfWTLqBcC2KZ6jyYvM4mQ=
