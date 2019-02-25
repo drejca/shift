@@ -8,8 +8,15 @@ import (
 type Compiler struct {
 	buf []byte
 	errors []error
-	sectionSizePos int
-	sectionSize int
+
+	sectionId int
+	sections []section
+}
+
+type section struct {
+	id int
+	pos int
+	size int
 }
 
 func New() *Compiler {
@@ -39,17 +46,19 @@ func (c *Compiler) Compile(node ast.Node) {
 			c.exportSectionBytes(fn)
 		}
 		c.emit(SECTION_CODE)
-		sectionSize := c.emit(ZERO)
-		c.emit(byte(1))
-		bodySize := c.emit(ZERO)
-		c.emit(ZERO) // number of local declarations
+		sectionId := c.startSection()
+		c.emit(byte(1)) // count(varuint32): count of function bodies to follow
+		// bodies(function_body...): sequence of Function Bodies
+		bodySectionId := c.startSection() // body_size(varuint32): size of function body to follow, in bytes
+		c.emit(ZERO) // local_count(varuint32): number of local entries
+		// none         locals(local_entry...): local variables
 
 		c.Compile(fn.Body)
 
-		c.emit(BODY_END)
+		c.emit(BODY_END) // end(byte): 0x0b, indicating the end of the body
 
-		c.fixup(sectionSize, byte(6))
-		c.fixup(bodySize, byte(4))
+		c.endSection(bodySectionId)
+		c.endSection(sectionId)
 	case *ast.BlockStatement:
 		block, _ := node.(*ast.BlockStatement)
 
@@ -64,6 +73,7 @@ func (c *Compiler) Compile(node ast.Node) {
 			c.errors = append(c.errors, err)
 		}
 
+		// code(byte...): bytecode of the function
 		c.emit(CONST_I32)
 		c.emit(byte(int32(val)))
 	}
@@ -71,19 +81,21 @@ func (c *Compiler) Compile(node ast.Node) {
 
 func (c *Compiler) typeSectionBytes(f *ast.Function) {
 	c.emit(SECTION_TYPE)
+	sectionId := c.startSection()
 
-	c.startSection()
+	c.emit(byte(1)) // count(varuint32): count of type entries to follow
+	// entries(func_type...): repeated type entries as described above
+	c.emit(FUNC) // form(varint7): the value for the 'func' type constructor as defined above
 
-	c.emit(byte(1))
-	c.emit(FUNC)
-	c.emit(ZERO)
+	c.emit(ZERO) // param_count(varuint32): the numbers of parameters to function
+	// none         param_types(value_type...): the parameter types of the function
 
 	if len(f.ReturnParams.Params) > 0 {
-		c.emit(byte(len(f.ReturnParams.Params)))
-		c.paramsTypes(f.ReturnParams.Params)
+		c.emit(byte(len(f.ReturnParams.Params))) // return_count(varuint1): the number of results from the function
+		c.paramsTypes(f.ReturnParams.Params) // return_type(value_type...?): the result type of the function (if return_count is 1)
 	}
 
-	c.endSection()
+	c.endSection(sectionId)
 }
 
 func (c *Compiler) paramsTypes(params []*ast.Parameter) {
@@ -97,43 +109,69 @@ func (c *Compiler) paramsTypes(params []*ast.Parameter) {
 
 func (c *Compiler) functionSectionBytes(f *ast.Function) {
 	c.emit(SECTION_FUNC)
+	sectionId := c.startSection()
 
-	c.startSection()
+	c.emit(byte(1)) // count(varuint32): count of signature indices to follow
+	c.emit(byte(0)) // types(varuint32...): sequence of indices into the type section 0,1,2,3...
 
-	c.emit(byte(1))
-	c.emit(byte(0))
-
-	c.endSection()
+	c.endSection(sectionId)
 }
 
 func (c *Compiler) exportSectionBytes(f *ast.Function) {
 	c.emit(SECTION_EXPORT)
+	sectionId := c.startSection()
 
-	c.startSection()
+	c.emit(byte(uint32(1))) // count(varuint32): count of export entries to follow
+	c.emit(byte(len(f.Name))) // field_len(varuint32): length of field_str in bytes
+	c.emit([]byte(f.Name)...) // field_str(bytes): valid UTF-8 byte sequence
+	c.emit(EXT_KIND_FUNC) // kind(external_kind): the kind of definition being exported
+	c.emit(ZERO) // index(varuint32): the index into the corresponding index space
 
-	c.emit(byte(uint32(1)))
-	c.emit(byte(len(f.Name)))
-	c.emit([]byte(f.Name)...)
-	c.emit(EXT_KIND_FUNC)
-	c.emit(ZERO)
-
-	c.endSection()
+	c.endSection(sectionId)
 }
 
 func (c *Compiler) emit(bytes ...byte) (pos int) {
 	pos = len(c.buf)
 	c.buf = append(c.buf, bytes...)
-	c.sectionSize += len(bytes)
+	for i := range c.sections {
+		c.sections[i].size += len(bytes)
+	}
 	return pos
 }
 
-func (c *Compiler) startSection() {
-	c.sectionSizePos = c.emit(ZERO)
-	c.sectionSize = 0
+func (c *Compiler) startSection() (sectionId int) {
+	c.sectionId++
+	c.sections = append(c.sections, section{
+		id: c.sectionId,
+		pos: c.emit(ZERO),
+		size: 0,
+	})
+	return c.sectionId
 }
 
-func (c *Compiler) endSection() {
-	c.fixup(c.sectionSizePos, byte(c.sectionSize))
+func (c *Compiler) endSection(sectionId int) {
+	if section, found := c.findSection(sectionId); found {
+		c.fixup(section.pos, byte(section.size))
+		c.removeSection(sectionId)
+	}
+}
+
+func (c *Compiler) findSection(sectionId int) (sec section, found bool) {
+	for _, sec := range c.sections {
+		if sec.id == sectionId {
+			return sec, true
+		}
+	}
+	return section{}, false
+}
+
+func (c *Compiler) removeSection(sectionId int) {
+	for i, sec := range c.sections {
+		if sec.id == sectionId {
+			c.sections = append(c.sections[:i], c.sections[i+1:]...)
+			return
+		}
+	}
 }
 
 func (c *Compiler) fixup(pos int, bytes ...byte) {
