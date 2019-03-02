@@ -1,40 +1,16 @@
 package wasm
 
 import (
-	"github.com/drejca/shiftlang/assert"
 	"github.com/perlin-network/life/exec"
 	"github.com/drejca/shiftlang/parser"
 	"strings"
 	"testing"
 )
 
-func TestCompileFunction(t *testing.T) {
-	input := `
-fn Get() : i32 {
-	return 5;
-}
-`
-	expected := `
-(module
-	(type $t0 (func (result i32)))
-	(func $Get (export "Get") (type $t0) (result i32)
-		i32.const 5))`
-
-	p := parser.New(strings.NewReader(input))
-	program := p.Parse()
-
-	printer := NewPrinter(program)
-
-	err := assert.EqualString(expected, "\n" + printer.Print())
-	if err != nil {
-		t.Error(err)
-	}
-}
-
 func TestFunctionWithVm(t *testing.T) {
 	input := `
-fn Get() : i32 {
-	return 10;
+fn Add(a i32, b i32) : i32 {
+	return a + b;
 }
 `
 	p := parser.New(strings.NewReader(input))
@@ -48,17 +24,18 @@ fn Get() : i32 {
 		panic(err)
 	}
 
-	entryID, ok := vm.GetFunctionExport("Get")
+	entryID, ok := vm.GetFunctionExport("Add")
 	if !ok {
 		panic("entry function not found")
 	}
 
-	ret, err := vm.Run(entryID)
+	ret, err := vm.Run(entryID, int64(5), int64(7))
 	if err != nil {
+		vm.PrintStackTrace()
 		panic(err)
 	}
 
-	expect := int64(10)
+	expect := int64(12)
 	if ret != expect {
 		t.Errorf("expected %d but got %d", expect, ret)
 	}

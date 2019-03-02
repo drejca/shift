@@ -34,6 +34,7 @@ func (p *Program) String() string {
 
 type Function struct {
 	Name string
+	InputParams []*Parameter
 	ReturnParams *ReturnParamGroup
 	Body *BlockStatement
 }
@@ -44,7 +45,16 @@ func (f *Function) String() string {
 
 	out.WriteString("fn ")
 	out.WriteString(f.Name)
-	out.WriteString("()")
+	out.WriteString("(")
+	for i, param := range f.InputParams {
+		if i > 0 {
+			out.WriteString(", ")
+		}
+		out.WriteString(param.Ident.Value)
+		out.WriteString(" ")
+		out.WriteString(param.Type)
+	}
+	out.WriteString(")")
 
 	if f.ReturnParams != nil {
 		out.WriteString(f.ReturnParams.String())
@@ -133,3 +143,22 @@ type Identifier struct {
 
 func (i *Identifier) expressionNode()      {}
 func (i *Identifier) String() string       { return i.Value }
+
+type InfixExpression struct {
+	Token    token.Token // The operator token, e.g. +
+	Left     Expression
+	Operator string
+	Right    Expression
+}
+
+func (oe *InfixExpression) expressionNode()      {}
+func (oe *InfixExpression) TokenLiteral() string { return oe.Token.Lit }
+func (oe *InfixExpression) String() string {
+	var out bytes.Buffer
+
+	out.WriteString(oe.Left.String())
+	out.WriteString(" " + oe.Operator + " ")
+	out.WriteString(oe.Right.String())
+
+	return out.String()
+}

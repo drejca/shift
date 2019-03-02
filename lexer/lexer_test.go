@@ -8,8 +8,8 @@ import (
 
 func TestReadRune(t *testing.T) {
 	input := `
-fn Get() : i32 {
-	return 5;
+fn Add(a i32, b i32) : i32 {
+	return a + b;
 }`
 	lex := New(strings.NewReader(input))
 
@@ -23,8 +23,8 @@ fn Get() : i32 {
 
 func TestNextToken(t *testing.T) {
 	input := `
-fn Get() : i32 {
-	return 5;
+fn Add(a i32, b i32) : i32 {
+	return a + b;
 }~`
 
 	tests := []struct {
@@ -32,14 +32,21 @@ fn Get() : i32 {
 		literal string
 	} {
 		{tokenType: token.FUNC, literal: "fn"},
-		{tokenType: token.IDENT, literal: "Get"},
+		{tokenType: token.IDENT, literal: "Add"},
 		{tokenType: token.LPAREN, literal: "("},
+		{tokenType: token.IDENT, literal: "a"},
+		{tokenType: token.IDENT, literal: "i32"},
+		{tokenType: token.COLON, literal: ","},
+		{tokenType: token.IDENT, literal: "b"},
+		{tokenType: token.IDENT, literal: "i32"},
 		{tokenType: token.RPAREN, literal: ")"},
 		{tokenType: token.COLON, literal: ":"},
 		{tokenType: token.IDENT, literal: "i32"},
 		{tokenType: token.LCURLY, literal: "{"},
 		{tokenType: token.RETURN, literal: "return"},
-		{tokenType: token.IDENT, literal: "5"},
+		{tokenType: token.IDENT, literal: "a"},
+		{tokenType: token.PLUS, literal: "+"},
+		{tokenType: token.IDENT, literal: "b"},
 		{tokenType: token.SEMICOLON, literal: ";"},
 		{tokenType: token.RCURLY, literal: "}"},
 		{tokenType: token.ILLEGAL, literal: "~"},

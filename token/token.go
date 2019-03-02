@@ -25,6 +25,9 @@ const(
 	LCURLY
 	RCURLY
 	SEMICOLON
+
+	// Operands
+	PLUS
 )
 
 func Print(tokenType Type) string {

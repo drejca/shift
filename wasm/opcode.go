@@ -21,6 +21,13 @@ const (
 	TYPE_I32 = 0x7f
 	FUNC = 0x60
 
+	// Variable access
+	GET_LOCAL = 0x20
+	GET_GLOBAL = 0x23
+
+	// Numeric operators
+	I32_ADD = 0x6a
+
 	// external_kind kind for import/export
 	EXT_KIND_FUNC = 0x00
 

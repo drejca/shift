@@ -1,13 +1,16 @@
 package wasm
 
 import (
+	"fmt"
 	"github.com/drejca/shiftlang/ast"
-	"strconv"
 )
 
 type Compiler struct {
 	buf []byte
 	errors []error
+
+	symbolTable *SymbolTable
+	scopeIndex uint32
 
 	sectionId int
 	sections []section
@@ -20,30 +23,56 @@ type section struct {
 }
 
 func New() *Compiler {
-	return &Compiler{}
+	return &Compiler{symbolTable: NewSymbolTable()}
 }
 
 func (c *Compiler) Bytes() []byte {
 	return c.buf
 }
 
-func (c *Compiler) Compile(node ast.Node) {
-	switch node.(type) {
+func (c *Compiler) Compile(node ast.Node) error {
+	switch node := node.(type) {
 	case *ast.Program:
 		c.emit(WASM_MAGIC_NUM...)
 		c.emit(WASM_VERSION_1...)
 
-		program, _ := node.(*ast.Program)
-		for _, stmt := range program.Statements {
+		for _, stmt := range node.Statements {
 			c.Compile(stmt)
 		}
-	case *ast.Function:
-		fn, _ := node.(*ast.Function)
+	case *ast.InfixExpression:
+		err := c.Compile(node.Left)
+		if err != nil {
+			return err
+		}
 
-		c.typeSectionBytes(fn)
-		c.functionSectionBytes(fn)
-		if fn.Name[0] >= 'A' && fn.Name[0] <= 'Z' {
-			c.exportSectionBytes(fn)
+		err = c.Compile(node.Right)
+		if err != nil {
+			return err
+		}
+
+		switch node.Operator {
+		case "+":
+			c.emit(I32_ADD)
+		default:
+			return fmt.Errorf("unknown operator %s", node.Operator)
+		}
+	case *ast.Identifier:
+		symbol, ok := c.symbolTable.Resolve(node.Value)
+		if !ok {
+			return fmt.Errorf("undefined variable %s", node.Value)
+		}
+		c.loadSymbol(symbol)
+	case *ast.Function:
+		c.enterScope()
+
+		for _, param := range node.InputParams {
+			c.symbolTable.Define(param.Ident.Value)
+		}
+
+		c.typeSectionBytes(node)
+		c.functionSectionBytes(node)
+		if node.Name[0] >= 'A' && node.Name[0] <= 'Z' {
+			c.exportSectionBytes(node)
 		}
 		c.emit(SECTION_CODE)
 		sectionId := c.startSection()
@@ -53,30 +82,25 @@ func (c *Compiler) Compile(node ast.Node) {
 		c.emit(ZERO) // local_count(varuint32): number of local entries
 		// none         locals(local_entry...): local variables
 
-		c.Compile(fn.Body)
+		c.Compile(node.Body)
 
 		c.emit(BODY_END) // end(byte): 0x0b, indicating the end of the body
 
 		c.endSection(bodySectionId)
 		c.endSection(sectionId)
-	case *ast.BlockStatement:
-		block, _ := node.(*ast.BlockStatement)
 
-		for _, stmt := range block.Statements {
+		c.leaveScope()
+	case *ast.BlockStatement:
+		for _, stmt := range node.Statements {
 			c.Compile(stmt)
 		}
 	case *ast.ReturnStatement:
-		ret, _ := node.(*ast.ReturnStatement)
-
-		val, err :=  strconv.ParseInt(ret.ReturnValue.String(), 10, 32)
+		err := c.Compile(node.ReturnValue)
 		if err != nil {
-			c.errors = append(c.errors, err)
+			return err
 		}
-
-		// code(byte...): bytecode of the function
-		c.emit(CONST_I32)
-		c.emit(byte(int32(val)))
 	}
+	return nil
 }
 
 func (c *Compiler) typeSectionBytes(f *ast.Function) {
@@ -87,8 +111,9 @@ func (c *Compiler) typeSectionBytes(f *ast.Function) {
 	// entries(func_type...): repeated type entries as described above
 	c.emit(FUNC) // form(varint7): the value for the 'func' type constructor as defined above
 
-	c.emit(ZERO) // param_count(varuint32): the numbers of parameters to function
-	// none         param_types(value_type...): the parameter types of the function
+	c.emit(byte(len(f.InputParams))) // param_count(varuint32): the numbers of parameters to function
+	//param_types(value_type...): the parameter types of the function
+	c.paramsTypes(f.InputParams)
 
 	if len(f.ReturnParams.Params) > 0 {
 		c.emit(byte(len(f.ReturnParams.Params))) // return_count(varuint1): the number of results from the function
@@ -100,10 +125,14 @@ func (c *Compiler) typeSectionBytes(f *ast.Function) {
 
 func (c *Compiler) paramsTypes(params []*ast.Parameter) {
 	for _, param := range params {
-		switch param.Type {
-		case "i32":
-			c.emit(TYPE_I32)
-		}
+		c.paramsType(param)
+	}
+}
+
+func (c *Compiler) paramsType(param *ast.Parameter) {
+	switch param.Type {
+	case "i32":
+		c.emit(TYPE_I32)
 	}
 }
 
@@ -178,4 +207,24 @@ func (c *Compiler) fixup(pos int, bytes ...byte) {
 	for i, byte := range bytes {
 		c.buf[pos + i] = byte
 	}
+}
+
+func (c *Compiler) enterScope() {
+	c.scopeIndex++
+	c.symbolTable = NewEnclosedSymbolTable(c.symbolTable)
+}
+
+func (c *Compiler) leaveScope() {
+	c.scopeIndex--
+	c.symbolTable = c.symbolTable.Outer
+}
+
+func (c *Compiler) loadSymbol(s Symbol) {
+	switch s.Scope {
+	case GlobalScope:
+		c.emit(GET_GLOBAL)
+	case LocalScope:
+		c.emit(GET_LOCAL)
+	}
+	c.emit(byte(s.Index))
 }

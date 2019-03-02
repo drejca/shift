@@ -34,6 +34,8 @@ func (l *Lexer) NextToken() token.Token {
 	}
 
 	switch ch {
+	case ',':
+		return token.Token{Type: token.COLON, Lit: string(ch)}
 	case ';':
 		return token.Token{Type: token.SEMICOLON, Lit: string(ch)}
 	case '(':
@@ -46,6 +48,8 @@ func (l *Lexer) NextToken() token.Token {
 		return token.Token{Type: token.RCURLY, Lit: string(ch)}
 	case ':':
 		return token.Token{Type: token.COLON, Lit: string(ch)}
+	case '+':
+		return token.Token{Type: token.PLUS, Lit: string(ch)}
 	case eof:
 		return token.Token{Type: token.EOF, Lit: string(ch)}
 	default:

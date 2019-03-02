@@ -8,8 +8,8 @@ import (
 
 func TestParseFunc(t *testing.T) {
 	input := `
-fn Get() : i32 {
-	return 5;
+fn Add(a i32, b i32) : i32 {
+	return a + b;
 }`
 	p := New(strings.NewReader(input))
 	program := p.Parse()
