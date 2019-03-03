@@ -3,6 +3,12 @@ package token
 type Token struct {
 	Type Type
 	Lit string // token literal text
+	Pos Position // token position
+}
+
+type Position struct {
+	Line     int    // line number, starting at 1
+	Column   int    // column number, starting at 1
 }
 
 type Type int
@@ -10,9 +16,13 @@ type Type int
 const(
 	EOF Type = iota
 	ILLEGAL
+	UNKNOWN
 
 	PROGRAM
+
+	// Identifiers + literals
 	IDENT
+	INT
 
 	// Keywords
 	FUNC
@@ -28,36 +38,42 @@ const(
 
 	// Operands
 	PLUS
+	MINUS
 )
 
+var tokens = map[Type]string {
+	EOF: "EOF",
+	ILLEGAL: "ILLEGAL",
+
+	PROGRAM: "PROGRAM",
+
+	// Identifiers + literals
+	IDENT: "IDENT",
+	INT: "INT",
+
+	// Keywords
+	FUNC: "FUNC",
+	RETURN: "RETURN",
+
+	// Delimiters
+	LPAREN: "(",
+	RPAREN: ")",
+	COLON: ",",
+	LCURLY: "{",
+	RCURLY: "}",
+	SEMICOLON: ";",
+
+	// Operands
+	PLUS: "+",
+	MINUS: "-",
+}
+
 func Print(tokenType Type) string {
-	switch tokenType {
-	case EOF:
-		return "EOF"
-	case ILLEGAL:
-		return "ILLEGAL"
-	case PROGRAM:
-		return "PROGRAM"
-	case IDENT:
-		return "IDENT"
-	case FUNC:
-		return "FUNC"
-	case RETURN:
-		return "RETURN"
-	case LPAREN:
-		return "LPAREN"
-	case RPAREN:
-		return "RPAREN"
-	case COLON:
-		return "COLON"
-	case LCURLY:
-		return "LCURLY"
-	case RCURLY:
-		return "RCURLY"
-	case SEMICOLON:
-		return "SEMICOLON"
+	tokenStr, found := tokens[tokenType]
+	if !found {
+		return "unknown token type"
 	}
-	return "unknown type"
+	return tokenStr
 }
 
 func LookupIdent(ident string) Token {

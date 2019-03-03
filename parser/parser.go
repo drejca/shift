@@ -1,27 +1,31 @@
 package parser
 
 import (
+	"errors"
 	"fmt"
 	"github.com/drejca/shiftlang/ast"
 	"github.com/drejca/shiftlang/lexer"
 	"github.com/drejca/shiftlang/token"
 	"io"
+	"strconv"
 )
 
 const (
 	_ int = iota
 	LOWEST
-	SUM         // +
+	SUM   // +
+	MINUS // -
 )
 
 var precedences = map[token.Type]int{
-	token.PLUS:     SUM,
+	token.PLUS:  SUM,
+	token.MINUS: MINUS,
 }
 
 type Parser struct {
 	l *lexer.Lexer
 
-	curToken token.Token
+	curToken  token.Token
 	peekToken token.Token
 
 	prefixParseFns map[token.Type]prefixParseFn
@@ -40,9 +44,12 @@ func New(input io.Reader) *Parser {
 
 	p.prefixParseFns = make(map[token.Type]prefixParseFn)
 	p.registerPrefix(token.IDENT, p.parseIdentifier)
+	p.registerPrefix(token.INT, p.parseIntegerLiteral)
+	p.registerPrefix(token.LPAREN, p.parseGroupedExpression)
 
 	p.infixParseFns = make(map[token.Type]infixParseFn)
 	p.registerInfix(token.PLUS, p.parseInfixExpression)
+	p.registerInfix(token.MINUS, p.parseInfixExpression)
 
 	p.nextToken()
 	p.nextToken()
@@ -85,7 +92,7 @@ func (p *Parser) parseFunc() *ast.Function {
 	}
 
 	if p.peekTokenIs(token.IDENT) {
-		fn.InputParams =  p.parseInputParameters()
+		fn.InputParams = p.parseInputParameters()
 	} else if !p.expectPeek(token.RPAREN) {
 		return nil
 	}
@@ -156,6 +163,9 @@ func (p *Parser) parseBlockStatement() *ast.BlockStatement {
 		}
 		p.nextToken()
 	}
+	if p.curTokenIs(token.EOF) {
+		p.peekError(token.RCURLY)
+	}
 	return block
 }
 
@@ -184,7 +194,6 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 		if infix == nil {
 			return leftExp
 		}
-
 		p.nextToken()
 
 		leftExp = infix(leftExp)
@@ -193,10 +202,12 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 }
 
 func (p *Parser) peekPrecedence() int {
-	if p, ok := precedences[p.peekToken.Type]; ok {
-		return p
+	precedence, ok := precedences[p.peekToken.Type]
+	if !ok {
+		p.errors = append(p.errors, fmt.Errorf("precedence for %q not found", token.Print(p.peekToken.Type)))
+		return LOWEST
 	}
-	return LOWEST
+	return precedence
 }
 
 func (p *Parser) parseInfixExpression(left ast.Expression) ast.Expression {
@@ -213,19 +224,45 @@ func (p *Parser) parseInfixExpression(left ast.Expression) ast.Expression {
 	return expression
 }
 
-func (p *Parser) curPrecedence() int {
-	if p, ok := precedences[p.curToken.Type]; ok {
-		return p
+func (p *Parser) parseGroupedExpression() ast.Expression {
+	p.nextToken()
+
+	exp := p.parseExpression(LOWEST)
+
+	if !p.expectPeek(token.RPAREN) {
+		return nil
 	}
-	return LOWEST
+	return exp
+}
+
+func (p *Parser) curPrecedence() int {
+	precedence, ok := precedences[p.curToken.Type]
+	if !ok {
+		p.errors = append(p.errors, fmt.Errorf("precedence for %q not found", token.Print(p.curToken.Type)))
+		return LOWEST
+	}
+	return precedence
 }
 
 func (p *Parser) parseIdentifier() ast.Expression {
 	return &ast.Identifier{Value: p.curToken.Lit}
 }
 
+func (p *Parser) parseIntegerLiteral() ast.Expression {
+	lit := &ast.IntegerLiteral{Token: p.curToken}
+
+	value, err := strconv.ParseInt(p.curToken.Lit, 0, 64)
+	if err != nil {
+		msg := fmt.Sprintf("could not parse %q as integer", p.curToken.Lit)
+		p.errors = append(p.errors, errors.New(msg))
+		return nil
+	}
+	lit.Value = value
+	return lit
+}
+
 func (p *Parser) noPrefixParseFnError() {
-	err := fmt.Errorf("no prefix parse function for %s found", token.Print(p.curToken.Type))
+	err := fmt.Errorf("illegal symbol %s", p.curToken.Lit)
 	p.errors = append(p.errors, err)
 }
 
@@ -251,8 +288,7 @@ func (p *Parser) peekTokenIs(tokenType token.Type) bool {
 }
 
 func (p *Parser) peekError(tokenType token.Type) {
-	err := fmt.Errorf("expected next token to be %s, got %s(%s) instead",
-		token.Print(tokenType), token.Print(p.peekToken.Type), p.peekToken.Lit)
+	err := fmt.Errorf("missing %s", token.Print(tokenType))
 	p.errors = append(p.errors, err)
 }
 

@@ -144,6 +144,15 @@ type Identifier struct {
 func (i *Identifier) expressionNode()      {}
 func (i *Identifier) String() string       { return i.Value }
 
+type IntegerLiteral struct {
+	Token token.Token
+	Value int64
+}
+
+func (i *IntegerLiteral) expressionNode()      {}
+func (i *IntegerLiteral) TokenLiteral() string { return i.Token.Lit }
+func (i *IntegerLiteral) String() string       { return i.Token.Lit }
+
 type InfixExpression struct {
 	Token    token.Token // The operator token, e.g. +
 	Left     Expression
