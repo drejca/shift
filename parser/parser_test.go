@@ -11,7 +11,7 @@ import (
 func TestParseFunc(t *testing.T) {
 	input := `
 fn Add(a i32, b i32) : i32 {
-	return a + b;
+	return (a + b);
 }`
 	p := New(strings.NewReader(input))
 	program := p.Parse()
@@ -31,8 +31,8 @@ func TestReturnStatement(t *testing.T) {
 		input string
 		err error
 	} {
-		{input: `return 2 - 1;`},
-		{input: `return 5 + (2 - 1);`},
+		{input: `return (2 - 1);`},
+		{input: `return (5 + (2 - 1));`},
 	}
 
 	for _, test := range tests {

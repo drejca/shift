@@ -9,15 +9,16 @@ const (
 
 type Symbol struct {
 	Name string
+	Type string
 	Scope SymbolScope
-	Index int
+	Index uint32
 }
 
 type SymbolTable struct {
 	Outer *SymbolTable
 
 	store map[string]Symbol
-	numDefinitions int
+	numDefinitions uint32
 }
 
 func NewEnclosedSymbolTable(outer *SymbolTable) *SymbolTable {
@@ -31,8 +32,8 @@ func NewSymbolTable() *SymbolTable {
 	return &SymbolTable{store: s}
 }
 
-func (s *SymbolTable) Define(name string) Symbol {
-	symbol := Symbol{Name: name, Index: s.numDefinitions}
+func (s *SymbolTable) Define(name string, varType string) Symbol {
+	symbol := Symbol{Name: name, Index: s.numDefinitions, Type: varType}
 	if s.Outer == nil {
 		symbol.Scope = GlobalScope
 	} else {

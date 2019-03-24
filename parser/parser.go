@@ -20,6 +20,7 @@ const (
 var precedences = map[token.Type]int{
 	token.PLUS:  SUM,
 	token.MINUS: MINUS,
+	token.RPAREN: LOWEST,
 }
 
 type Parser struct {
