@@ -44,19 +44,21 @@ type Node interface {
 	String() string
 }
 
+type Section interface {
+	Node
+	sectionNode()
+}
+
 type Module struct {
-	typeSection *TypeSection
-	functionSection *FunctionSection
-	codeSection *CodeSection
-	exportSection *ExportSection
+	sections []Section
 }
 func (m *Module) String() string {
 	var out bytes.Buffer
 
 	out.WriteString("(module \n")
-	out.WriteString(m.typeSection.String())
-	out.WriteString(m.codeSection.String())
-	out.WriteString(m.exportSection.String())
+	for _, section := range m.sections {
+		out.WriteString(section.String())
+	}
 	out.WriteString("\n)")
 	return out.String()
 }
@@ -73,6 +75,7 @@ func (t *TypeSection) String() string {
 	}
 	return out.String()
 }
+func (t *TypeSection) sectionNode() {}
 
 type FuncType struct {
 	name string
@@ -131,16 +134,15 @@ type FunctionSection struct {
 	count uint
 	typesIdx []uint32
 }
-
 func (f *FunctionSection) String() string {
 	return ""
 }
+func (f *FunctionSection) sectionNode() {}
 
 type CodeSection struct {
 	count uint32
 	bodies []*FunctionBody
 }
-
 func (c *CodeSection) String() string {
 	var out bytes.Buffer
 
@@ -153,6 +155,7 @@ func (c *CodeSection) String() string {
 
 	return out.String()
 }
+func (c *CodeSection) sectionNode() {}
 
 type FunctionBody struct {
 	bodySize uint32
@@ -184,6 +187,30 @@ func (g *GetLocal) String() string {
 	return out.String()
 }
 
+type SetGlobal struct {
+	name string
+	globalIndex uint32
+}
+func (s *SetGlobal) String() string {
+	var out bytes.Buffer
+
+	out.WriteString("\n 		set_global $")
+	out.WriteString(s.name)
+	return out.String()
+}
+
+type SetLocal struct {
+	name string
+	localIndex uint32
+}
+func (s *SetLocal) String() string {
+	var out bytes.Buffer
+
+	out.WriteString("\n 		set_local $")
+	out.WriteString(s.name)
+	return out.String()
+}
+
 type Add struct {
 }
 func (a *Add) String() string {
@@ -206,7 +233,6 @@ type ExportSection struct {
 	count uint32
 	entries []*ExportEntry
 }
-
 func (e *ExportSection) String() string {
 	var out bytes.Buffer
 
@@ -216,6 +242,7 @@ func (e *ExportSection) String() string {
 
 	return out.String()
 }
+func (e *ExportSection) sectionNode() {}
 
 type ExportEntry struct {
 	field string
@@ -230,5 +257,17 @@ func (e *ExportEntry) String() string {
 	out.WriteString(`" (func $`)
 	out.WriteString(e.field)
 	out.WriteString("))")
+	return out.String()
+}
+
+type ConstInt struct {
+	value int64
+	typeName string
+}
+func (c *ConstInt) String() string {
+	var out bytes.Buffer
+
+	out.WriteString("	i32.const ")
+	out.WriteString(string(c.value))
 	return out.String()
 }

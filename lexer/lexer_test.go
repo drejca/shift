@@ -27,6 +27,7 @@ fn Add(a i32, b i32) : i32 {
 	return a + b;
 }~
 2 - 1;
+let a = 4 + 5;
 `
 
 	tests := []struct {
@@ -55,6 +56,13 @@ fn Add(a i32, b i32) : i32 {
 		{tokenType: token.INT, literal: "2"},
 		{tokenType: token.MINUS, literal: "-"},
 		{tokenType: token.INT, literal: "1"},
+		{tokenType: token.SEMICOLON, literal: ";"},
+		{tokenType: token.LET, literal: "let"},
+		{tokenType: token.IDENT, literal: "a"},
+		{tokenType: token.ASSIGN, literal: "="},
+		{tokenType: token.INT, literal: "4"},
+		{tokenType: token.PLUS, literal: "+"},
+		{tokenType: token.INT, literal: "5"},
 		{tokenType: token.SEMICOLON, literal: ";"},
 		{tokenType: token.EOF, literal: string(rune(token.EOF))},
 	}

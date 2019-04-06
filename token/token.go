@@ -27,6 +27,7 @@ const(
 	// Keywords
 	FUNC
 	RETURN
+	LET
 
 	// Delimiters
 	LPAREN
@@ -36,9 +37,10 @@ const(
 	RCURLY
 	SEMICOLON
 
-	// Operands
+	// Operators
 	PLUS
 	MINUS
+	ASSIGN
 )
 
 var tokens = map[Type]string {
@@ -54,6 +56,7 @@ var tokens = map[Type]string {
 	// Keywords
 	FUNC: "FUNC",
 	RETURN: "RETURN",
+	LET: "LET",
 
 	// Delimiters
 	LPAREN: "(",
@@ -63,9 +66,10 @@ var tokens = map[Type]string {
 	RCURLY: "}",
 	SEMICOLON: ";",
 
-	// Operands
+	// Operators
 	PLUS: "+",
 	MINUS: "-",
+	ASSIGN: "=",
 }
 
 func Print(tokenType Type) string {
@@ -82,6 +86,8 @@ func LookupIdent(ident string) Token {
 		return Token{Type: FUNC, Lit: ident}
 	case "return":
 		return Token{Type: RETURN, Lit: ident}
+	case "let":
+		return Token{Type: LET, Lit: ident}
 	}
 	return Token{Type: IDENT, Lit: ident}
 }

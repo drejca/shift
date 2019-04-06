@@ -9,8 +9,9 @@ import (
 
 func TestEmitter(t *testing.T) {
 	input := `
-fn Add(a i32, b i32) : i32 {
-	return a + b;
+fn Calc(a i32, b i32) : i32 {
+	let c = 2;
+	return a + b + c;
 }
 `
 	p := parser.New(strings.NewReader(input))
@@ -34,7 +35,7 @@ fn Add(a i32, b i32) : i32 {
 		panic(err)
 	}
 
-	entryID, ok := vm.GetFunctionExport("Add")
+	entryID, ok := vm.GetFunctionExport("Calc")
 	if !ok {
 		panic("entry function not found")
 	}
@@ -45,7 +46,7 @@ fn Add(a i32, b i32) : i32 {
 		panic(err)
 	}
 
-	expect := int64(12)
+	expect := int64(14)
 	if ret != expect {
 		t.Errorf("expected %d but got %d", expect, ret)
 	}

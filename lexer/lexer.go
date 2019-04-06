@@ -64,6 +64,8 @@ func (l *Lexer) NextToken() token.Token {
 		return l.Token(token.PLUS, string(ch))
 	case '-':
 		return l.Token(token.MINUS, string(ch))
+	case '=':
+		return l.Token(token.ASSIGN, string(ch))
 	case eof:
 		return l.Token(token.EOF, string(ch))
 	default:

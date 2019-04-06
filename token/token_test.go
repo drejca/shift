@@ -26,6 +26,7 @@ func TestLookupIdent(t *testing.T) {
 	} {
 		{ident: "fn", expectToken: Token{Lit: "fn", Type: FUNC}},
 		{ident: "return", expectToken: Token{Lit: "return", Type: RETURN}},
+		{ident: "let", expectToken: Token{Lit: "let", Type: LET}},
 		{ident: "name", expectToken: Token{Lit: "name", Type: IDENT}},
 	}
 

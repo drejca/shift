@@ -24,10 +24,9 @@ func (e *Emmiter) Emit(node Node) error {
 	case *Module:
 		e.emit(WASM_MAGIC_NUM...)
 		e.emit(WASM_VERSION_1...)
-		e.Emit(node.typeSection)
-		e.Emit(node.functionSection)
-		e.Emit(node.exportSection)
-		e.Emit(node.codeSection)
+		for _, section := range node.sections {
+			e.Emit(section)
+		}
 	case *TypeSection:
 		e.emit(SECTION_TYPE)
 		sectionId := e.startSection()
@@ -76,6 +75,9 @@ func (e *Emmiter) Emit(node Node) error {
 		}
 		e.emit(byte(node.resultCount))
 		e.Emit(node.resultType)
+	case *ConstInt:
+		e.emit(CONST_I32)
+		e.emit(byte(node.value))
 	case *ValueType:
 		e.emit(e.typeOpCode(node.typeName))
 	case *ResultType:
@@ -101,6 +103,12 @@ func (e *Emmiter) Emit(node Node) error {
 	case *LocalEntry:
 		e.emit(byte(node.count))
 		e.Emit(node.valueType)
+	case *SetGlobal:
+		e.emit(SET_GLOBAL)
+		e.emit(byte(node.globalIndex))
+	case *SetLocal:
+		e.emit(SET_LOCAL)
+		e.emit(byte(node.localIndex))
 	case *GetLocal:
 		e.emit(GET_LOCAL)
 		e.emit(byte(node.localIndex))

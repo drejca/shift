@@ -33,6 +33,7 @@ func TestReturnStatement(t *testing.T) {
 	} {
 		{input: `return (2 - 1);`},
 		{input: `return (5 + (2 - 1));`},
+		{input: `let a = (5 - 2);`},
 	}
 
 	for _, test := range tests {

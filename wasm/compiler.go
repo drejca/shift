@@ -7,7 +7,10 @@ import (
 
 type Compiler struct {
 	module *Module
-	currentBody *FunctionBody
+	typeSection *TypeSection
+	functionSection *FunctionSection
+	exportSection *ExportSection
+	codeSection *CodeSection
 
 	buf    []byte
 	errors []error
@@ -17,35 +20,48 @@ type Compiler struct {
 }
 
 func New() *Compiler {
-	return &Compiler{symbolTable: NewSymbolTable()}
+	return &Compiler{
+		symbolTable: NewSymbolTable(),
+		module: &Module{},
+		typeSection: &TypeSection{},
+		functionSection: &FunctionSection{},
+		exportSection: &ExportSection{},
+		codeSection: &CodeSection{},
+	}
 }
 
 func (c *Compiler) Bytes() []byte {
 	return c.buf
 }
 
-func (c *Compiler) Compile(node ast.Node) error {
+func (c *Compiler) Compile(node ast.Node) (Node, error) {
 	switch node := node.(type) {
 	case *ast.Program:
-		c.module = &Module{
-			typeSection: &TypeSection{},
-			functionSection: &FunctionSection{},
-			exportSection: &ExportSection{},
-			codeSection: &CodeSection{},
-		}
-
 		for _, stmt := range node.Statements {
 			c.Compile(stmt)
 		}
+		if c.typeSection.count > 0 {
+			c.module.sections = append(c.module.sections, c.typeSection)
+		}
+		if c.functionSection.count > 0 {
+			c.module.sections = append(c.module.sections, c.functionSection)
+		}
+		if c.codeSection.count > 0 {
+			c.module.sections = append(c.module.sections, c.codeSection)
+		}
+		if c.exportSection.count > 0 {
+			c.module.sections = append(c.module.sections, c.exportSection)
+		}
+		return c.module, nil
 	case *ast.InfixExpression:
-		err := c.Compile(node.Left)
+		_, err := c.Compile(node.Left)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
-		err = c.Compile(node.Right)
+		_, err = c.Compile(node.Right)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		switch node.Operator {
@@ -54,31 +70,22 @@ func (c *Compiler) Compile(node ast.Node) error {
 		case "-":
 			c.subtractTypes(node.Left, node.Right)
 		default:
-			return fmt.Errorf("unknown operator %s", node.Operator)
+			return nil, fmt.Errorf("unknown operator %s", node.Operator)
 		}
-	case *ast.Identifier:
-		symbol, ok := c.symbolTable.Resolve(node.Value)
-		if !ok {
-			return fmt.Errorf("undefined variable %s", node.Value)
-		}
-		c.loadSymbol(symbol)
-	case *ast.IntegerLiteral:
 	case *ast.Function:
 		c.enterScope()
 
-		c.module.typeSection.count++
-		c.module.functionSection.count++
-		c.module.codeSection.count++
+		c.typeSection.count++
+		c.functionSection.count++
+		c.codeSection.count++
 
 		entry := &FuncType{}
 		entry.name = node.Name
 
-		c.currentBody = &FunctionBody{}
-
 		for _, param := range node.InputParams {
 			symbol := c.symbolTable.Define(param.Ident.Value, param.Type)
 
-			c.module.functionSection.typesIdx = append(c.module.functionSection.typesIdx, symbol.Index)
+			c.functionSection.typesIdx = append(c.functionSection.typesIdx, symbol.Index)
 
 			entry.paramTypes = append(entry.paramTypes, valueType(param))
 			entry.paramCount++
@@ -92,16 +99,19 @@ func (c *Compiler) Compile(node ast.Node) error {
 			}
 		}
 
-		c.module.typeSection.entries = append(c.module.typeSection.entries, entry)
+		c.typeSection.entries = append(c.typeSection.entries, entry)
 
 		if node.Name[0] >= 'A' && node.Name[0] <= 'Z' {
-			exportEntry := &ExportEntry{field: node.Name, index: c.module.exportSection.count}
-			c.module.exportSection.entries = append(c.module.exportSection.entries, exportEntry)
-			c.module.exportSection.count++
+			if c.exportSection == nil {
+				c.exportSection = &ExportSection{}
+			}
+			exportEntry := &ExportEntry{field: node.Name, index: c.exportSection.count}
+			c.exportSection.entries = append(c.exportSection.entries, exportEntry)
+			c.exportSection.count++
 		}
 
 		c.Compile(node.Body)
-		c.module.codeSection.bodies = append(c.module.codeSection.bodies, c.currentBody)
+		c.codeSection.bodies = append(c.codeSection.bodies, c.symbolTable.scopeBody)
 
 		c.leaveScope()
 	case *ast.BlockStatement:
@@ -109,12 +119,42 @@ func (c *Compiler) Compile(node ast.Node) error {
 			c.Compile(stmt)
 		}
 	case *ast.ReturnStatement:
-		err := c.Compile(node.ReturnValue)
+		expression, err := c.Compile(node.ReturnValue)
 		if err != nil {
-			return err
+			return nil, err
 		}
+		return expression, nil
+	case *ast.LetStatement:
+		symbol := c.symbolTable.Define(node.Name.Value, c.inferType(node.Value))
+		_, err := c.Compile(node.Value)
+		if err != nil {
+			return nil, err
+		}
+
+		if symbol.Scope == GlobalScope {
+			setGlobal  := &SetGlobal{name: symbol.Name, globalIndex: symbol.Index}
+			c.symbolTable.scopeBody.code = append(c.symbolTable.scopeBody.code, setGlobal)
+			return setGlobal, nil
+		} else {
+			c.symbolTable.scopeBody.localCount++
+			localEntry := &LocalEntry{count: 1, valueType: &ValueType{name: symbol.Name, typeName: symbol.Type}}
+			c.symbolTable.scopeBody.locals = append(c.symbolTable.scopeBody.locals, localEntry)
+
+			setLocal := &SetLocal{name: symbol.Name, localIndex: symbol.Index}
+			c.symbolTable.scopeBody.code = append(c.symbolTable.scopeBody.code, setLocal)
+			return setLocal, nil
+        }
+	case *ast.Identifier:
+		symbol, ok := c.symbolTable.Resolve(node.Value)
+		if !ok {
+			return nil, fmt.Errorf("undefined variable %s", node.Value)
+		}
+		c.loadSymbol(symbol)
+	case *ast.IntegerLiteral:
+		constInt := &ConstInt{value: node.Value, typeName: "i32"}
+		c.symbolTable.scopeBody.code = append(c.symbolTable.scopeBody.code, constInt)
 	}
-	return nil
+	return nil, nil
 }
 
 func valueType(param *ast.Parameter) *ValueType {
@@ -124,76 +164,18 @@ func valueType(param *ast.Parameter) *ValueType {
 	}
 }
 
-func getType(typeName string) byte {
-	switch typeName {
-	case "i32":
-		return TYPE_I32
-	}
-	return ZERO
+func (c *Compiler) inferType(expression ast.Expression) string {
+	return "i32"
 }
 
 func (c *Compiler) sumTypes(left ast.Node, right ast.Node) {
 	add := &Add{}
-	c.currentBody.code = append(c.currentBody.code, add)
+	c.symbolTable.scopeBody.code = append(c.symbolTable.scopeBody.code, add)
 }
 
 func (c *Compiler) subtractTypes(left ast.Node, right ast.Node) {
 	sub := &Sub{}
-	c.currentBody.code = append(c.currentBody.code, sub)
-}
-
-func (c *Compiler) getType(left ast.Node, right ast.Node) (varType string) {
-	leftType :=  c.resolveSymbol(left)
-	rightType := c.resolveSymbol(right)
-
-	if leftType != rightType {
-		c.errors = append(c.errors, fmt.Errorf("can not subtract %s and %s", leftType, rightType))
-		return ""
-	}
-	return leftType
-}
-
-func (c *Compiler) sumTypeOpCode(varType string) byte {
-	switch varType {
-	case "i32":
-		return I32_ADD
-	default:
-		c.errors = append(c.errors, fmt.Errorf("can not sum user defined type %s", varType))
-		return ZERO
-	}
-}
-
-func (c *Compiler) subtractTypeOpCode(varType string) byte {
-	switch varType {
-	case "i32":
-		return I32_SUB
-	default:
-		c.errors = append(c.errors, fmt.Errorf("can not subtract user defined type %s", varType))
-		return ZERO
-	}
-}
-
-func (c *Compiler) resolveSymbol(node ast.Node) (varType string) {
-	ident, ok := node.(*ast.Identifier)
-	if ok {
-		symbol, ok := c.symbolTable.Resolve(ident.Value)
-		if !ok {
-			c.errors = append(c.errors, fmt.Errorf("undefined variable %s", ident.Value))
-			return
-		}
-		c.loadSymbol(symbol)
-		return symbol.Type
-	}
-
-	integer, ok := node.(*ast.IntegerLiteral)
-	if ok {
-		//c.emit(CONST_I32)
-		//c.emit(byte(int32(integer.Value)))
-		return integer.Token.Lit
-	}
-
-	c.errors = append(c.errors, fmt.Errorf("symbol could not be loaded for %s", node.String()))
-	return
+	c.symbolTable.scopeBody.code = append(c.symbolTable.scopeBody.code, sub)
 }
 
 func (c *Compiler) enterScope() {
@@ -208,11 +190,9 @@ func (c *Compiler) leaveScope() {
 
 func (c *Compiler) loadSymbol(s Symbol) {
 	switch s.Scope {
-	case GlobalScope:
-		//c.emit(GET_GLOBAL)
 	case LocalScope:
 		getLocal := &GetLocal{name: s.Name, localIndex: s.Index}
-		c.currentBody.code = append(c.currentBody.code, getLocal)
+		c.symbolTable.scopeBody.code = append(c.symbolTable.scopeBody.code, getLocal)
 	}
 }
 
