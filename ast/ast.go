@@ -3,6 +3,7 @@ package ast
 import (
 	"bytes"
 	"github.com/drejca/shiftlang/token"
+	"strings"
 )
 
 type Node interface {
@@ -43,6 +44,7 @@ func (f *Function) statementNode() {}
 func (f *Function) String() string {
 	var out bytes.Buffer
 
+	out.WriteString("\n")
 	out.WriteString("fn ")
 	out.WriteString(f.Name)
 	out.WriteString("(")
@@ -194,6 +196,29 @@ func (oe *InfixExpression) String() string {
 	out.WriteString(oe.Left.String())
 	out.WriteString(" " + oe.Operator + " ")
 	out.WriteString(oe.Right.String())
+	out.WriteString(")")
+
+	return out.String()
+}
+
+type CallExpression struct {
+	Token     token.Token // The '(' token
+	Function  Expression
+	Arguments []Expression
+}
+func (ce *CallExpression) expressionNode()      {}
+func (ce *CallExpression) TokenLiteral() string { return ce.Token.Lit }
+func (ce *CallExpression) String() string {
+	var out bytes.Buffer
+
+	var args []string
+	for _, a := range ce.Arguments {
+		args = append(args, a.String())
+	}
+
+	out.WriteString(ce.Function.String())
+	out.WriteString("(")
+	out.WriteString(strings.Join(args, ", "))
 	out.WriteString(")")
 
 	return out.String()

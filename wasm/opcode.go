@@ -1,6 +1,9 @@
 package wasm
 
-import "bytes"
+import (
+	"bytes"
+	"strconv"
+)
 
 var (
 	WASM_MAGIC_NUM = []byte{0x00, 0x61, 0x73, 0x6d}
@@ -29,6 +32,9 @@ const (
 	GET_GLOBAL = 0x23
 	SET_GLOBAL = 0x24
 
+	// Call operators
+	CALL = 0x10
+
 	// Numeric operators
 	I32_ADD = 0x6a
 	I32_SUB = 0x6b
@@ -49,13 +55,29 @@ type Section interface {
 	sectionNode()
 }
 
+type Operation interface {
+	Node
+	operationNode()
+}
+
 type Module struct {
+	typeSection *TypeSection
+	codeSection *CodeSection
+
 	sections []Section
 }
 func (m *Module) String() string {
 	var out bytes.Buffer
-
 	out.WriteString("(module \n")
+
+	for i, funcType := range m.typeSection.entries {
+		if i > 0 {
+			out.WriteString("\n")
+		}
+		out.WriteString(funcType.String())
+		out.WriteString(printFunctionCode(m.codeSection, funcType.functionIndex))
+	}
+
 	for _, section := range m.sections {
 		out.WriteString(section.String())
 	}
@@ -67,17 +89,11 @@ type TypeSection struct {
 	count uint32
 	entries []*FuncType
 }
-func (t *TypeSection) String() string {
-	var out bytes.Buffer
-
-	for _, funcType := range t.entries {
-		out.WriteString(funcType.String())
-	}
-	return out.String()
-}
 func (t *TypeSection) sectionNode() {}
+func (t *TypeSection) String() string { return ""}
 
 type FuncType struct {
+	functionIndex uint32
 	name string
 	paramCount uint32
 	paramTypes []*ValueType
@@ -86,7 +102,6 @@ type FuncType struct {
 }
 func (f *FuncType) String() string {
 	var out bytes.Buffer
-
 	out.WriteString("	(func $")
 	out.WriteString(f.name)
 	out.WriteString(" ")
@@ -107,13 +122,11 @@ type ValueType struct {
 }
 func (v *ValueType) String() string {
 	var out bytes.Buffer
-
 	out.WriteString("(param $")
 	out.WriteString(v.name)
 	out.WriteString(" ")
 	out.WriteString(v.typeName)
 	out.WriteString(") ")
-
 	return out.String()
 }
 
@@ -122,11 +135,9 @@ type ResultType struct {
 }
 func (r *ResultType) String() string {
 	var out bytes.Buffer
-
 	out.WriteString("(result ")
 	out.WriteString(r.typeName)
 	out.WriteString(") ")
-
 	return out.String()
 }
 
@@ -134,55 +145,80 @@ type FunctionSection struct {
 	count uint
 	typesIdx []uint32
 }
-func (f *FunctionSection) String() string {
-	return ""
-}
 func (f *FunctionSection) sectionNode() {}
+func (f *FunctionSection) String() string { return "" }
 
 type CodeSection struct {
 	count uint32
 	bodies []*FunctionBody
 }
-func (c *CodeSection) String() string {
-	var out bytes.Buffer
-
-	for _, body := range c.bodies {
-		for _, instruction := range body.code {
-			out.WriteString(instruction.String())
-		}
-		out.WriteString(")")
-	}
-
-	return out.String()
-}
 func (c *CodeSection) sectionNode() {}
+func (c *CodeSection) String() string { return ""}
 
 type FunctionBody struct {
+	functionIndex uint32
 	bodySize uint32
 	localCount uint32
 	locals []*LocalEntry
 	code []Node
 }
 func (f *FunctionBody) String() string {
-	return ""
+	var out bytes.Buffer
+	for _, local := range f.locals {
+		out.WriteString(local.String())
+	}
+
+	for _, instruction := range f.code {
+		out.WriteString("\n		")
+		out.WriteString(instruction.String())
+	}
+	out.WriteString(")")
+	return out.String()
+}
+
+type Call struct {
+	name string
+	functionIndex uint32
+	arguments []Operation
+}
+func (c *Call) operationNode() {}
+func (c *Call) String() string {
+	var out bytes.Buffer
+	out.WriteString("(call $")
+	out.WriteString(c.name)
+
+	for _, arg := range c.arguments {
+		out.WriteString(" (")
+		out.WriteString(arg.String())
+		out.WriteString(")")
+	}
+	out.WriteString(")")
+	return out.String()
 }
 
 type LocalEntry struct {
 	count uint32
 	valueType *ValueType
 }
+func (l *LocalEntry) operationNode() {}
 func (l *LocalEntry) String() string {
-	return ""
+	var out bytes.Buffer
+	out.WriteString("(local $")
+	out.WriteString(l.valueType.name)
+	out.WriteString(" ")
+	out.WriteString(l.valueType.typeName)
+	out.WriteString(")")
+	return out.String()
 }
 
 type GetLocal struct {
 	name string
 	localIndex uint32
 }
+func (g *GetLocal) operationNode() {}
 func (g *GetLocal) String() string {
 	var out bytes.Buffer
-
-	out.WriteString("\n		get_local $")
+	out.WriteString("get_local $")
 	out.WriteString(g.name)
 	return out.String()
 }
@@ -191,10 +227,10 @@ type SetGlobal struct {
 	name string
 	globalIndex uint32
 }
+func (s *SetGlobal) operationNode() {}
 func (s *SetGlobal) String() string {
 	var out bytes.Buffer
-
-	out.WriteString("\n 		set_global $")
+	out.WriteString("set_global $")
 	out.WriteString(s.name)
 	return out.String()
 }
@@ -203,29 +239,29 @@ type SetLocal struct {
 	name string
 	localIndex uint32
 }
+func (s *SetLocal) operationNode() {}
 func (s *SetLocal) String() string {
 	var out bytes.Buffer
-
-	out.WriteString("\n 		set_local $")
+	out.WriteString("set_local $")
 	out.WriteString(s.name)
 	return out.String()
 }
 
 type Add struct {
 }
+func (a *Add) operationNode() {}
 func (a *Add) String() string {
 	var out bytes.Buffer
-
-	out.WriteString("\n		i32.add")
+	out.WriteString("i32.add")
 	return out.String()
 }
 
 type Sub struct {
 }
+func (s *Sub) operationNode() {}
 func (s *Sub) String() string {
 	var out bytes.Buffer
-
-	out.WriteString("\n		i32.sub")
+	out.WriteString("i32.sub")
 	return out.String()
 }
 
@@ -233,25 +269,21 @@ type ExportSection struct {
 	count uint32
 	entries []*ExportEntry
 }
+func (e *ExportSection) sectionNode() {}
 func (e *ExportSection) String() string {
 	var out bytes.Buffer
-
 	for _, exportEntry := range e.entries {
 		out.WriteString(exportEntry.String())
 	}
-
 	return out.String()
 }
-func (e *ExportSection) sectionNode() {}
 
 type ExportEntry struct {
 	field string
 	index uint32
 }
-
 func (e *ExportEntry) String() string {
 	var out bytes.Buffer
-
 	out.WriteString("\n	(export \"")
 	out.WriteString(e.field)
 	out.WriteString(`" (func $`)
@@ -266,8 +298,16 @@ type ConstInt struct {
 }
 func (c *ConstInt) String() string {
 	var out bytes.Buffer
-
-	out.WriteString("	i32.const ")
-	out.WriteString(string(c.value))
+	out.WriteString("i32.const ")
+	out.WriteString(strconv.FormatInt(c.value, 10))
 	return out.String()
+}
+
+func printFunctionCode(codeSection *CodeSection, functionIndex uint32) string {
+	for _, body := range codeSection.bodies {
+		if body.functionIndex == functionIndex {
+			return body.String()
+		}
+	}
+	return ""
 }

@@ -41,27 +41,33 @@ func (c *Compiler) Compile(node ast.Node) (Node, error) {
 			c.Compile(stmt)
 		}
 		if c.typeSection.count > 0 {
-			c.module.sections = append(c.module.sections, c.typeSection)
+			c.module.typeSection = c.typeSection
 		}
 		if c.functionSection.count > 0 {
 			c.module.sections = append(c.module.sections, c.functionSection)
 		}
 		if c.codeSection.count > 0 {
-			c.module.sections = append(c.module.sections, c.codeSection)
+			c.module.codeSection = c.codeSection
 		}
 		if c.exportSection.count > 0 {
 			c.module.sections = append(c.module.sections, c.exportSection)
 		}
 		return c.module, nil
 	case *ast.InfixExpression:
-		_, err := c.Compile(node.Left)
+		operation, err := c.Compile(node.Left)
 		if err != nil {
 			return nil, err
 		}
+		if operation != nil {
+			c.symbolTable.scopeBody.code = append(c.symbolTable.scopeBody.code, operation)
+		}
 
-		_, err = c.Compile(node.Right)
+		operation, err = c.Compile(node.Right)
 		if err != nil {
 			return nil, err
+		}
+		if operation != nil {
+			c.symbolTable.scopeBody.code = append(c.symbolTable.scopeBody.code, operation)
 		}
 
 		switch node.Operator {
@@ -73,19 +79,23 @@ func (c *Compiler) Compile(node ast.Node) (Node, error) {
 			return nil, fmt.Errorf("unknown operator %s", node.Operator)
 		}
 	case *ast.Function:
+		symbol := c.symbolTable.Define(node.Name, "func")
+
 		c.enterScope()
 
 		c.typeSection.count++
 		c.functionSection.count++
 		c.codeSection.count++
 
-		entry := &FuncType{}
-		entry.name = node.Name
+		entry := &FuncType{
+			functionIndex: symbol.Index,
+			name: node.Name,
+		}
+
+		c.functionSection.typesIdx = append(c.functionSection.typesIdx, symbol.Index)
 
 		for _, param := range node.InputParams {
-			symbol := c.symbolTable.Define(param.Ident.Value, param.Type)
-
-			c.functionSection.typesIdx = append(c.functionSection.typesIdx, symbol.Index)
+			c.symbolTable.Define(param.Ident.Value, param.Type)
 
 			entry.paramTypes = append(entry.paramTypes, valueType(param))
 			entry.paramCount++
@@ -105,10 +115,12 @@ func (c *Compiler) Compile(node ast.Node) (Node, error) {
 			if c.exportSection == nil {
 				c.exportSection = &ExportSection{}
 			}
-			exportEntry := &ExportEntry{field: node.Name, index: c.exportSection.count}
+			exportEntry := &ExportEntry{field: node.Name, index: symbol.Index}
 			c.exportSection.entries = append(c.exportSection.entries, exportEntry)
 			c.exportSection.count++
 		}
+
+		c.symbolTable.scopeBody.functionIndex = symbol.Index
 
 		c.Compile(node.Body)
 		c.codeSection.bodies = append(c.codeSection.bodies, c.symbolTable.scopeBody)
@@ -126,14 +138,16 @@ func (c *Compiler) Compile(node ast.Node) (Node, error) {
 		return expression, nil
 	case *ast.LetStatement:
 		symbol := c.symbolTable.Define(node.Name.Value, c.inferType(node.Value))
-		_, err := c.Compile(node.Value)
+		operation, err := c.Compile(node.Value)
 		if err != nil {
 			return nil, err
 		}
+		c.symbolTable.scopeBody.code = append(c.symbolTable.scopeBody.code, operation)
 
 		if symbol.Scope == GlobalScope {
 			setGlobal  := &SetGlobal{name: symbol.Name, globalIndex: symbol.Index}
-			c.symbolTable.scopeBody.code = append(c.symbolTable.scopeBody.code, setGlobal)
+			c.addOperation(setGlobal)
+
 			return setGlobal, nil
 		} else {
 			c.symbolTable.scopeBody.localCount++
@@ -141,18 +155,41 @@ func (c *Compiler) Compile(node ast.Node) (Node, error) {
 			c.symbolTable.scopeBody.locals = append(c.symbolTable.scopeBody.locals, localEntry)
 
 			setLocal := &SetLocal{name: symbol.Name, localIndex: symbol.Index}
-			c.symbolTable.scopeBody.code = append(c.symbolTable.scopeBody.code, setLocal)
+			c.addOperation(setLocal)
+
 			return setLocal, nil
         }
+	case *ast.CallExpression:
+		symbol, ok := c.FunctionSymbol(node.Function)
+		if !ok {
+			return nil, fmt.Errorf("function symbol not found")
+		}
+
+		call := &Call{functionIndex: symbol.Index, name: node.Function.String()}
+
+		for _, arg := range node.Arguments {
+			expression, err := c.Compile(arg)
+			if err != nil {
+				return nil, err
+			}
+
+			operation, ok := expression.(Operation)
+			if !ok {
+				return nil, fmt.Errorf("its not operation")
+			}
+			call.arguments = append(call.arguments, operation)
+		}
+		return call, nil
 	case *ast.Identifier:
 		symbol, ok := c.symbolTable.Resolve(node.Value)
 		if !ok {
 			return nil, fmt.Errorf("undefined variable %s", node.Value)
 		}
-		c.loadSymbol(symbol)
+		operation := c.loadSymbol(symbol)
+		return operation, nil
 	case *ast.IntegerLiteral:
 		constInt := &ConstInt{value: node.Value, typeName: "i32"}
-		c.symbolTable.scopeBody.code = append(c.symbolTable.scopeBody.code, constInt)
+		return constInt, nil
 	}
 	return nil, nil
 }
@@ -164,18 +201,30 @@ func valueType(param *ast.Parameter) *ValueType {
 	}
 }
 
+func (c *Compiler) FunctionSymbol(callExpression ast.Node) (symbol Symbol, found bool) {
+	switch node := callExpression.(type) {
+	case *ast.Identifier:
+		return c.symbolTable.Resolve(node.Value)
+	default:
+		return c.symbolTable.Resolve(callExpression.String())
+	}
+	return Symbol{}, false
+}
+
 func (c *Compiler) inferType(expression ast.Expression) string {
 	return "i32"
 }
 
 func (c *Compiler) sumTypes(left ast.Node, right ast.Node) {
-	add := &Add{}
-	c.symbolTable.scopeBody.code = append(c.symbolTable.scopeBody.code, add)
+	c.addOperation(&Add{})
 }
 
 func (c *Compiler) subtractTypes(left ast.Node, right ast.Node) {
-	sub := &Sub{}
-	c.symbolTable.scopeBody.code = append(c.symbolTable.scopeBody.code, sub)
+	c.addOperation(&Sub{})
+}
+
+func (c *Compiler) addOperation(operation Operation) {
+	c.symbolTable.scopeBody.code = append(c.symbolTable.scopeBody.code, operation)
 }
 
 func (c *Compiler) enterScope() {
@@ -188,12 +237,13 @@ func (c *Compiler) leaveScope() {
 	c.symbolTable = c.symbolTable.Outer
 }
 
-func (c *Compiler) loadSymbol(s Symbol) {
+func (c *Compiler) loadSymbol(s Symbol) Operation {
 	switch s.Scope {
 	case LocalScope:
 		getLocal := &GetLocal{name: s.Name, localIndex: s.Index}
-		c.symbolTable.scopeBody.code = append(c.symbolTable.scopeBody.code, getLocal)
+		return getLocal
 	}
+	return nil
 }
 
 func (c *Compiler) Module() *Module {

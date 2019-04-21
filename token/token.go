@@ -30,12 +30,14 @@ const(
 	LET
 
 	// Delimiters
+	COMMA
+	COLON
+	SEMICOLON
+
 	LPAREN
 	RPAREN
-	COLON
 	LCURLY
 	RCURLY
-	SEMICOLON
 
 	// Operators
 	PLUS
@@ -59,12 +61,15 @@ var tokens = map[Type]string {
 	LET: "LET",
 
 	// Delimiters
+	COMMA: ",",
+	COLON: ":",
+	SEMICOLON: ";",
+
 	LPAREN: "(",
 	RPAREN: ")",
-	COLON: ",",
 	LCURLY: "{",
 	RCURLY: "}",
-	SEMICOLON: ";",
+
 
 	// Operators
 	PLUS: "+",

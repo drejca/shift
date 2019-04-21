@@ -15,12 +15,14 @@ const (
 	LOWEST
 	SUM   // +
 	MINUS // -
+	CALL
 )
 
 var precedences = map[token.Type]int{
 	token.PLUS:  SUM,
 	token.MINUS: MINUS,
 	token.RPAREN: LOWEST,
+	token.LPAREN:   CALL,
 }
 
 type Parser struct {
@@ -51,6 +53,7 @@ func New(input io.Reader) *Parser {
 	p.infixParseFns = make(map[token.Type]infixParseFn)
 	p.registerInfix(token.PLUS, p.parseInfixExpression)
 	p.registerInfix(token.MINUS, p.parseInfixExpression)
+	p.registerInfix(token.LPAREN, p.parseCallExpression)
 
 	p.nextToken()
 	p.nextToken()
@@ -130,7 +133,7 @@ func (p *Parser) parseInputParameters() []*ast.Parameter {
 		if p.curTokenIs(token.IDENT) {
 			param.Type = p.curToken.Lit
 		}
-		if p.peekTokenIs(token.COLON) {
+		if p.peekTokenIs(token.COMMA) {
 			p.nextToken()
 		}
 		inputParams = append(inputParams, param)
@@ -228,13 +231,41 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 	return leftExp
 }
 
-func (p *Parser) peekPrecedence() int {
-	precedence, ok := precedences[p.peekToken.Type]
-	if !ok {
-		p.errors = append(p.errors, fmt.Errorf("precedence for %q not found", token.Print(p.peekToken.Type)))
-		return LOWEST
+func (p *Parser) parseCallExpression(function ast.Expression) ast.Expression {
+	exp := &ast.CallExpression{Token: p.curToken, Function: function}
+	exp.Arguments = p.parseExpressionList(token.RPAREN)
+	return exp
+}
+
+func (p *Parser) parseExpressionList(end token.Type) []ast.Expression {
+	var list []ast.Expression
+
+	if p.peekTokenIs(end) {
+		p.nextToken()
+		return list
 	}
-	return precedence
+
+	p.nextToken()
+	list = append(list, p.parseExpression(LOWEST))
+
+	for p.peekTokenIs(token.COMMA) {
+		p.nextToken()
+		p.nextToken()
+		list = append(list, p.parseExpression(LOWEST))
+	}
+
+	if !p.expectPeek(end) {
+		return nil
+	}
+
+	return list
+}
+
+func (p *Parser) peekPrecedence() int {
+	if precedence, ok := precedences[p.peekToken.Type]; ok {
+		return precedence
+	}
+	return LOWEST
 }
 
 func (p *Parser) parseInfixExpression(left ast.Expression) ast.Expression {
@@ -263,12 +294,10 @@ func (p *Parser) parseGroupedExpression() ast.Expression {
 }
 
 func (p *Parser) curPrecedence() int {
-	precedence, ok := precedences[p.curToken.Type]
-	if !ok {
-		p.errors = append(p.errors, fmt.Errorf("precedence for %q not found", token.Print(p.curToken.Type)))
-		return LOWEST
+	if precedence, ok := precedences[p.curToken.Type]; ok {
+		return precedence
 	}
-	return precedence
+	return LOWEST
 }
 
 func (p *Parser) parseIdentifier() ast.Expression {

@@ -24,9 +24,12 @@ func (e *Emmiter) Emit(node Node) error {
 	case *Module:
 		e.emit(WASM_MAGIC_NUM...)
 		e.emit(WASM_VERSION_1...)
+
+		e.Emit(node.typeSection)
 		for _, section := range node.sections {
 			e.Emit(section)
 		}
+		e.Emit(node.codeSection)
 	case *TypeSection:
 		e.emit(SECTION_TYPE)
 		sectionId := e.startSection()
@@ -49,14 +52,10 @@ func (e *Emmiter) Emit(node Node) error {
 		e.emit(SECTION_FUNC)
 		sectionId := e.startSection()
 
-		e.emit(byte(1))
-		e.emit(byte(0))
-		/*
 		e.emit(byte(node.count))
 		for _, typeIdx := range node.typesIdx {
 			e.emit(byte(typeIdx))
 		}
-		*/
 		e.endSection(sectionId)
 	case *CodeSection:
 		e.emit(SECTION_CODE)
@@ -100,6 +99,12 @@ func (e *Emmiter) Emit(node Node) error {
 		e.emit(BODY_END)
 
 		e.endSection(sectionId)
+	case *Call:
+		for _, op := range node.arguments {
+			e.Emit(op)
+		}
+		e.emit(CALL)
+		e.emit(byte(node.functionIndex))
 	case *LocalEntry:
 		e.emit(byte(node.count))
 		e.Emit(node.valueType)

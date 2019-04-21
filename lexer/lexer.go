@@ -47,6 +47,8 @@ func (l *Lexer) NextToken() token.Token {
 
 	switch ch {
 	case ',':
+		return l.Token(token.COMMA, string(ch))
+	case ':':
 		return l.Token(token.COLON, string(ch))
 	case ';':
 		return l.Token(token.SEMICOLON, string(ch))
@@ -58,8 +60,6 @@ func (l *Lexer) NextToken() token.Token {
 		return l.Token(token.LCURLY, string(ch))
 	case '}':
 		return l.Token(token.RCURLY, string(ch))
-	case ':':
-		return l.Token(token.COLON, string(ch))
 	case '+':
 		return l.Token(token.PLUS, string(ch))
 	case '-':
