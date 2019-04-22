@@ -32,6 +32,9 @@ const (
 	GET_GLOBAL = 0x23
 	SET_GLOBAL = 0x24
 
+	// Control flow operators
+	NOP = 0x01
+
 	// Call operators
 	CALL = 0x10
 
@@ -62,9 +65,9 @@ type Operation interface {
 
 type Module struct {
 	typeSection *TypeSection
+	functionSection *FunctionSection
+	exportSection *ExportSection
 	codeSection *CodeSection
-
-	sections []Section
 }
 func (m *Module) String() string {
 	var out bytes.Buffer
@@ -77,10 +80,8 @@ func (m *Module) String() string {
 		out.WriteString(funcType.String())
 		out.WriteString(printFunctionCode(m.codeSection, funcType.functionIndex))
 	}
+	out.WriteString(m.exportSection.String())
 
-	for _, section := range m.sections {
-		out.WriteString(section.String())
-	}
 	out.WriteString("\n)")
 	return out.String()
 }
@@ -160,7 +161,7 @@ type FunctionBody struct {
 	bodySize uint32
 	localCount uint32
 	locals []*LocalEntry
-	code []Node
+	code []Operation
 }
 func (f *FunctionBody) String() string {
 	var out bytes.Buffer
@@ -296,6 +297,7 @@ type ConstInt struct {
 	value int64
 	typeName string
 }
+func (c *ConstInt) operationNode() {}
 func (c *ConstInt) String() string {
 	var out bytes.Buffer
 	out.WriteString("i32.const ")
@@ -310,4 +312,13 @@ func printFunctionCode(codeSection *CodeSection, functionIndex uint32) string {
 		}
 	}
 	return ""
+}
+
+type NoOp struct {
+}
+func (n *NoOp) operationNode() {}
+func (n *NoOp) String() string {
+	var out bytes.Buffer
+	out.WriteString("nop")
+	return out.String()
 }

@@ -9,23 +9,20 @@ import (
 
 func TestCompileToString(t *testing.T) {
 	input := `
-fn add(a i32, b i32) : i32 {
-	return a + b;
-}
-
 fn Calc(a i32, b i32) : i32 {
 	let c = 2;
 	return add(a, b) + c;
+}
+
+fn add(a i32, b i32) : i32 {
+	return a + b;
 }
 `
 	p := parser.New(strings.NewReader(input))
 	program := p.Parse()
 
 	compiler := New()
-	module, err := compiler.Compile(program)
-	if err != nil {
-		t.Error(err)
-	}
+	module := compiler.CompileProgram(program)
 
 	for _, err := range compiler.Errors() {
 		t.Error(err)
@@ -33,20 +30,20 @@ fn Calc(a i32, b i32) : i32 {
 
 	expected := `
 (module 
-	(func $add (param $a i32) (param $b i32) (result i32) 
-		get_local $a
-		get_local $b
-		i32.add)
 	(func $Calc (param $a i32) (param $b i32) (result i32) (local $c i32)
 		i32.const 2
 		set_local $c
 		(call $add (get_local $a) (get_local $b))
 		get_local $c
 		i32.add)
+	(func $add (param $a i32) (param $b i32) (result i32) 
+		get_local $a
+		get_local $b
+		i32.add)
 	(export "Calc" (func $Calc))
 )`
 
-	err = assert.EqualString(expected, "\n"+module.String())
+	err := assert.EqualString(expected, "\n"+module.String())
 	if err != nil {
 		t.Error(err)
 	}

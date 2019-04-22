@@ -3,201 +3,249 @@ package wasm
 import (
 	"fmt"
 	"github.com/drejca/shiftlang/ast"
+	"reflect"
 )
 
 type Compiler struct {
-	module *Module
-	typeSection *TypeSection
-	functionSection *FunctionSection
-	exportSection *ExportSection
-	codeSection *CodeSection
-
-	buf    []byte
-	errors []error
-
 	symbolTable *SymbolTable
-	scopeIndex  uint32
+	typeSection *TypeSection
+	functionBody *FunctionBody
+
+	errors []error
 }
 
 func New() *Compiler {
 	return &Compiler{
 		symbolTable: NewSymbolTable(),
-		module: &Module{},
-		typeSection: &TypeSection{},
-		functionSection: &FunctionSection{},
-		exportSection: &ExportSection{},
-		codeSection: &CodeSection{},
 	}
 }
 
-func (c *Compiler) Bytes() []byte {
-	return c.buf
+func (c *Compiler) CompileProgram(program *ast.Program) *Module {
+	module := &Module{
+		functionSection: &FunctionSection{},
+	}
+	var functionIndex uint32 = 0
+
+	for _, stmt := range program.Statements {
+		function, ok := stmt.(*ast.Function)
+		if ok {
+			module.functionSection.count++
+			module.functionSection.typesIdx = append(module.functionSection.typesIdx, functionIndex)
+
+			funcType := c.CompileFunctionSignature(function, functionIndex)
+
+			if funcType.name[0] >= 'A' && funcType.name[0] <= 'Z' {
+				c.appendExportEntry(module, funcType)
+			}
+			c.appendFunctionType(module, funcType)
+
+			functionIndex++
+		}
+	}
+
+	for _, stmt := range program.Statements {
+		function, ok := stmt.(*ast.Function)
+		if ok {
+			funcBody := c.CompileFunctionBody(function, module.typeSection)
+			c.appendCodeSection(module, funcBody)
+		}
+	}
+
+	return module
 }
 
-func (c *Compiler) Compile(node ast.Node) (Node, error) {
+func (c *Compiler) CompileFunctionSignature(function *ast.Function, functionIndex uint32) *FuncType {
+	funcType := &FuncType{
+		functionIndex: functionIndex,
+		name: function.Name,
+	}
+
+	for _, param := range function.InputParams {
+		valueType := &ValueType{name: param.Ident.Value, typeName: param.Type}
+		funcType.paramTypes = append(funcType.paramTypes, valueType)
+		funcType.paramCount++
+	}
+
+	if len(function.ReturnParams.Params) > 1 {
+		c.errors = append(c.errors, fmt.Errorf("fn %s(...) : (...) multiple return types is not implemented", function.Name))
+	}
+
+	for _, param := range function.ReturnParams.Params {
+		resultType := &ResultType{typeName: param.Type}
+		funcType.resultType = resultType
+		funcType.resultCount = 1
+	}
+
+	return funcType
+}
+
+func (c *Compiler) CompileFunctionBody(function *ast.Function, typeSection *TypeSection) *FunctionBody {
+	c.functionBody = &FunctionBody{}
+
+	funcType, found := c.getFunctionType(typeSection, function.Name)
+	if !found {
+		c.errors = append(c.errors, fmt.Errorf("function type for %s not found", function.Name))
+		return nil
+	}
+	c.functionBody.functionIndex = funcType.functionIndex
+
+	c.enterScope()
+
+	for _, param := range function.InputParams {
+		c.symbolTable.Define(param.Ident.Value, param.Type)
+	}
+
+	for _, stmt := range function.Body.Statements {
+		operations := c.CompileExpression(stmt)
+		c.functionBody.code = append(c.functionBody.code, operations...)
+	}
+
+	c.leaveScope()
+	return c.functionBody
+}
+
+func (c *Compiler) CompileExpression(node ast.Node) []Operation {
 	switch node := node.(type) {
-	case *ast.Program:
-		for _, stmt := range node.Statements {
-			c.Compile(stmt)
-		}
-		if c.typeSection.count > 0 {
-			c.module.typeSection = c.typeSection
-		}
-		if c.functionSection.count > 0 {
-			c.module.sections = append(c.module.sections, c.functionSection)
-		}
-		if c.codeSection.count > 0 {
-			c.module.codeSection = c.codeSection
-		}
-		if c.exportSection.count > 0 {
-			c.module.sections = append(c.module.sections, c.exportSection)
-		}
-		return c.module, nil
 	case *ast.InfixExpression:
-		operation, err := c.Compile(node.Left)
-		if err != nil {
-			return nil, err
-		}
-		if operation != nil {
-			c.symbolTable.scopeBody.code = append(c.symbolTable.scopeBody.code, operation)
-		}
-
-		operation, err = c.Compile(node.Right)
-		if err != nil {
-			return nil, err
-		}
-		if operation != nil {
-			c.symbolTable.scopeBody.code = append(c.symbolTable.scopeBody.code, operation)
-		}
-
-		switch node.Operator {
-		case "+":
-			c.sumTypes(node.Left, node.Right)
-		case "-":
-			c.subtractTypes(node.Left, node.Right)
-		default:
-			return nil, fmt.Errorf("unknown operator %s", node.Operator)
-		}
-	case *ast.Function:
-		symbol := c.symbolTable.Define(node.Name, "func")
-
-		c.enterScope()
-
-		c.typeSection.count++
-		c.functionSection.count++
-		c.codeSection.count++
-
-		entry := &FuncType{
-			functionIndex: symbol.Index,
-			name: node.Name,
-		}
-
-		c.functionSection.typesIdx = append(c.functionSection.typesIdx, symbol.Index)
-
-		for _, param := range node.InputParams {
-			c.symbolTable.Define(param.Ident.Value, param.Type)
-
-			entry.paramTypes = append(entry.paramTypes, valueType(param))
-			entry.paramCount++
-		}
-
-		if len(node.ReturnParams.Params) > 0 {
-			for _, param := range node.ReturnParams.Params {
-				resultType := &ResultType{typeName: param.Type}
-				entry.resultType = resultType
-				entry.resultCount++
-			}
-		}
-
-		c.typeSection.entries = append(c.typeSection.entries, entry)
-
-		if node.Name[0] >= 'A' && node.Name[0] <= 'Z' {
-			if c.exportSection == nil {
-				c.exportSection = &ExportSection{}
-			}
-			exportEntry := &ExportEntry{field: node.Name, index: symbol.Index}
-			c.exportSection.entries = append(c.exportSection.entries, exportEntry)
-			c.exportSection.count++
-		}
-
-		c.symbolTable.scopeBody.functionIndex = symbol.Index
-
-		c.Compile(node.Body)
-		c.codeSection.bodies = append(c.codeSection.bodies, c.symbolTable.scopeBody)
-
-		c.leaveScope()
-	case *ast.BlockStatement:
-		for _, stmt := range node.Statements {
-			c.Compile(stmt)
-		}
+		return c.CompileInfixExpression(node)
 	case *ast.ReturnStatement:
-		expression, err := c.Compile(node.ReturnValue)
-		if err != nil {
-			return nil, err
-		}
-		return expression, nil
+		return c.CompileExpression(node.ReturnValue)
 	case *ast.LetStatement:
-		symbol := c.symbolTable.Define(node.Name.Value, c.inferType(node.Value))
-		operation, err := c.Compile(node.Value)
-		if err != nil {
-			return nil, err
-		}
-		c.symbolTable.scopeBody.code = append(c.symbolTable.scopeBody.code, operation)
-
-		if symbol.Scope == GlobalScope {
-			setGlobal  := &SetGlobal{name: symbol.Name, globalIndex: symbol.Index}
-			c.addOperation(setGlobal)
-
-			return setGlobal, nil
-		} else {
-			c.symbolTable.scopeBody.localCount++
-			localEntry := &LocalEntry{count: 1, valueType: &ValueType{name: symbol.Name, typeName: symbol.Type}}
-			c.symbolTable.scopeBody.locals = append(c.symbolTable.scopeBody.locals, localEntry)
-
-			setLocal := &SetLocal{name: symbol.Name, localIndex: symbol.Index}
-			c.addOperation(setLocal)
-
-			return setLocal, nil
-        }
+		return c.CompileLetStatement(node, c.functionBody)
 	case *ast.CallExpression:
-		symbol, ok := c.FunctionSymbol(node.Function)
-		if !ok {
-			return nil, fmt.Errorf("function symbol not found")
-		}
-
-		call := &Call{functionIndex: symbol.Index, name: node.Function.String()}
-
-		for _, arg := range node.Arguments {
-			expression, err := c.Compile(arg)
-			if err != nil {
-				return nil, err
-			}
-
-			operation, ok := expression.(Operation)
-			if !ok {
-				return nil, fmt.Errorf("its not operation")
-			}
-			call.arguments = append(call.arguments, operation)
-		}
-		return call, nil
+		return c.CompileCallExpression(node, c.typeSection)
 	case *ast.Identifier:
-		symbol, ok := c.symbolTable.Resolve(node.Value)
-		if !ok {
-			return nil, fmt.Errorf("undefined variable %s", node.Value)
-		}
-		operation := c.loadSymbol(symbol)
-		return operation, nil
+		return c.CompileIdentifier(node)
 	case *ast.IntegerLiteral:
 		constInt := &ConstInt{value: node.Value, typeName: "i32"}
-		return constInt, nil
+		return []Operation{constInt}
 	}
-	return nil, nil
+	c.handleError(fmt.Errorf("unknown type %s", reflect.TypeOf(node)))
+	return []Operation{}
 }
 
-func valueType(param *ast.Parameter) *ValueType {
-	return &ValueType{
-		name: param.Ident.Value,
-		typeName: param.Type,
+func (c *Compiler) CompileLetStatement(letStatement *ast.LetStatement, functionBody *FunctionBody) []Operation {
+	var operations []Operation
+
+	symbol := c.symbolTable.Define(letStatement.Name.Value, c.inferType(letStatement.Value))
+
+	expressionOps := c.CompileExpression(letStatement.Value)
+	operations = append(operations, expressionOps...)
+
+	if symbol.Scope == GlobalScope {
+		setGlobal  := &SetGlobal{name: symbol.Name, globalIndex: symbol.Index}
+		operations = append(operations, setGlobal)
+	} else {
+		functionBody.localCount++
+		localEntry := &LocalEntry{count: 1, valueType: &ValueType{name: symbol.Name, typeName: symbol.Type}}
+		functionBody.locals = append(functionBody.locals, localEntry)
+
+		setLocal := &SetLocal{name: symbol.Name, localIndex: symbol.Index}
+		operations = append(operations, setLocal)
+	}
+	return operations
+}
+
+func (c *Compiler) CompileCallExpression(callExpression *ast.CallExpression, typeSection *TypeSection) []Operation {
+	var operations []Operation
+
+	funcName := callExpression.Function.String()
+
+	funcType, found := c.getFunctionType(typeSection, funcName)
+	if !found {
+		c.errors = append(c.errors, fmt.Errorf("function type for %s not found", funcName))
+		return nil
+	}
+
+	call := &Call{functionIndex: funcType.functionIndex, name: funcName}
+
+	for _, arg := range callExpression.Arguments {
+		operations := c.CompileExpression(arg)
+		call.arguments = append(call.arguments, operations...)
+	}
+	operations = append(operations, call)
+	return operations
+}
+
+func (c *Compiler) CompileInfixExpression(infixExpression *ast.InfixExpression) []Operation {
+	var operations []Operation
+
+	operation := c.CompileExpression(infixExpression.Left)
+	operations = append(operations, operation...)
+
+	operation = c.CompileExpression(infixExpression.Right)
+	operations = append(operations, operation...)
+
+	switch infixExpression.Operator {
+	case "+":
+		operation, err := c.sumTypes(infixExpression.Left, infixExpression.Right)
+		c.handleError(err)
+		operations = append(operations, operation)
+	case "-":
+		operation, err := c.subtractTypes(infixExpression.Left, infixExpression.Right)
+		c.handleError(err)
+		operations = append(operations, operation)
+	default:
+		c.handleError(fmt.Errorf("unknown operator %s", infixExpression.Operator))
+	}
+	return operations
+}
+
+func (c *Compiler) CompileIdentifier(identifier *ast.Identifier) []Operation {
+	symbol, ok := c.symbolTable.Resolve(identifier.Value)
+	if !ok {
+		c.handleError(fmt.Errorf("undefined variable %s", identifier.Value))
+		return []Operation{}
+	}
+	operation := c.loadSymbol(symbol)
+	return []Operation{operation}
+}
+
+func (c *Compiler) getFunctionType(typeSection *TypeSection, funcName string) (funcType *FuncType, found bool) {
+	for _, entry := range typeSection.entries {
+		if entry.name == funcName {
+			return entry, true
+		}
+	}
+	return nil, false
+}
+
+func (c *Compiler) appendExportEntry(module *Module, funcType *FuncType) {
+	if module.exportSection == nil {
+		module.exportSection = &ExportSection{}
+	}
+	exportEntry := &ExportEntry{index: funcType.functionIndex, field: funcType.name}
+
+	module.exportSection.entries = append(module.exportSection.entries, exportEntry)
+	module.exportSection.count++
+}
+
+func (c *Compiler) appendFunctionType(module *Module, funcType *FuncType) {
+	if module.typeSection == nil {
+		module.typeSection = &TypeSection{}
+		c.typeSection = module.typeSection
+	}
+	module.typeSection.entries = append(module.typeSection.entries, funcType)
+	module.typeSection.count++
+}
+
+func (c *Compiler) appendCodeSection(module *Module, funcBody *FunctionBody) {
+	if module.codeSection == nil {
+		module.codeSection = &CodeSection{}
+	}
+	module.codeSection.bodies = append(module.codeSection.bodies, funcBody)
+	module.codeSection.count++
+}
+
+func (c *Compiler) appendOperation(functionBody *FunctionBody, operation Operation) {
+	if operation != nil {
+		functionBody.code = append(functionBody.code, operation)
+	}
+}
+
+func (c *Compiler) handleError(err error) {
+	if err != nil {
+		c.errors = append(c.errors, err)
 	}
 }
 
@@ -215,25 +263,19 @@ func (c *Compiler) inferType(expression ast.Expression) string {
 	return "i32"
 }
 
-func (c *Compiler) sumTypes(left ast.Node, right ast.Node) {
-	c.addOperation(&Add{})
+func (c *Compiler) sumTypes(left ast.Node, right ast.Node) (Operation, error) {
+	return &Add{}, nil
 }
 
-func (c *Compiler) subtractTypes(left ast.Node, right ast.Node) {
-	c.addOperation(&Sub{})
-}
-
-func (c *Compiler) addOperation(operation Operation) {
-	c.symbolTable.scopeBody.code = append(c.symbolTable.scopeBody.code, operation)
+func (c *Compiler) subtractTypes(left ast.Node, right ast.Node) (Operation, error) {
+	return &Sub{}, nil
 }
 
 func (c *Compiler) enterScope() {
-	c.scopeIndex++
 	c.symbolTable = NewEnclosedSymbolTable(c.symbolTable)
 }
 
 func (c *Compiler) leaveScope() {
-	c.scopeIndex--
 	c.symbolTable = c.symbolTable.Outer
 }
 
@@ -244,10 +286,6 @@ func (c *Compiler) loadSymbol(s Symbol) Operation {
 		return getLocal
 	}
 	return nil
-}
-
-func (c *Compiler) Module() *Module {
-	return c.module
 }
 
 func (c *Compiler) Errors() []error {

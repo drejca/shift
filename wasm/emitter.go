@@ -26,9 +26,8 @@ func (e *Emmiter) Emit(node Node) error {
 		e.emit(WASM_VERSION_1...)
 
 		e.Emit(node.typeSection)
-		for _, section := range node.sections {
-			e.Emit(section)
-		}
+		e.Emit(node.functionSection)
+		e.Emit(node.exportSection)
 		e.Emit(node.codeSection)
 	case *TypeSection:
 		e.emit(SECTION_TYPE)

@@ -19,20 +19,17 @@ type SymbolTable struct {
 
 	store map[string]Symbol
 	numDefinitions uint32
-
-	scopeBody *FunctionBody
 }
 
 func NewEnclosedSymbolTable(outer *SymbolTable) *SymbolTable {
 	s := NewSymbolTable()
 	s.Outer = outer
-	s.scopeBody = &FunctionBody{}
 	return s
 }
 
 func NewSymbolTable() *SymbolTable {
 	s := make(map[string]Symbol)
-	return &SymbolTable{store: s, scopeBody: &FunctionBody{}}
+	return &SymbolTable{store: s}
 }
 
 func (s *SymbolTable) Define(name string, varType string) Symbol {

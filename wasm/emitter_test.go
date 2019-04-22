@@ -9,27 +9,27 @@ import (
 
 func TestEmitter(t *testing.T) {
 	input := `
-fn add(a i32, b i32) : i32 {
-	return a + b;
-}
-
 fn Calc(a i32, b i32) : i32 {
 	let c = 2;
 	return add(a, b) + c;
+}
+
+fn add(a i32, b i32) : i32 {
+	return a + b;
 }
 `
 	p := parser.New(strings.NewReader(input))
 	program := p.Parse()
 
 	compiler := New()
-	compiler.Compile(program)
+	module := compiler.CompileProgram(program)
 
 	for _, err := range compiler.Errors() {
 		t.Error(err)
 	}
 
 	emitter := NewEmitter()
-	err := emitter.Emit(compiler.Module())
+	err := emitter.Emit(module)
 	if err != nil {
 		t.Error(err)
 	}
