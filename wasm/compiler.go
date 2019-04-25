@@ -2,7 +2,7 @@ package wasm
 
 import (
 	"fmt"
-	"github.com/drejca/shiftlang/ast"
+	"github.com/drejca/shift/ast"
 	"reflect"
 )
 

@@ -1,8 +1,8 @@
 package wasm
 
 import (
-	"github.com/drejca/shiftlang/assert"
-	"github.com/drejca/shiftlang/parser"
+	"github.com/drejca/shift/assert"
+	"github.com/drejca/shift/parser"
 	"strings"
 	"testing"
 )
@@ -10,12 +10,12 @@ import (
 func TestCompileToString(t *testing.T) {
 	input := `
 fn Calc(a i32, b i32) : i32 {
-	let c = 2;
-	return add(a, b) + c;
+	let c = 2
+	return add(a, b) + c
 }
 
 fn add(a i32, b i32) : i32 {
-	return a + b;
+	return a + b
 }
 `
 	p := parser.New(strings.NewReader(input))

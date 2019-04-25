@@ -1,7 +1,7 @@
 package lexer
 
 import (
-	"github.com/drejca/shiftlang/token"
+	"github.com/drejca/shift/token"
 	"strings"
 	"testing"
 )
@@ -9,7 +9,7 @@ import (
 func TestReadRune(t *testing.T) {
 	input := `
 fn Add(a i32, b i32) : i32 {
-	return a + b;
+	return a + b
 }`
 	lex := New(strings.NewReader(input))
 
@@ -24,10 +24,10 @@ fn Add(a i32, b i32) : i32 {
 func TestNextToken(t *testing.T) {
 	input := `
 fn Add(a i32, b i32) : i32 {
-	return a + b;
+	return a + b
 }~
-2 - 1;
-let a = 4 + 5;
+2 - 1
+let a = 4 + 5
 `
 
 	tests := []struct {
@@ -50,20 +50,17 @@ let a = 4 + 5;
 		{tokenType: token.IDENT, literal: "a"},
 		{tokenType: token.PLUS, literal: "+"},
 		{tokenType: token.IDENT, literal: "b"},
-		{tokenType: token.SEMICOLON, literal: ";"},
 		{tokenType: token.RCURLY, literal: "}"},
 		{tokenType: token.ILLEGAL, literal: "~"},
 		{tokenType: token.INT, literal: "2"},
 		{tokenType: token.MINUS, literal: "-"},
 		{tokenType: token.INT, literal: "1"},
-		{tokenType: token.SEMICOLON, literal: ";"},
 		{tokenType: token.LET, literal: "let"},
 		{tokenType: token.IDENT, literal: "a"},
 		{tokenType: token.ASSIGN, literal: "="},
 		{tokenType: token.INT, literal: "4"},
 		{tokenType: token.PLUS, literal: "+"},
 		{tokenType: token.INT, literal: "5"},
-		{tokenType: token.SEMICOLON, literal: ";"},
 		{tokenType: token.EOF, literal: string(rune(token.EOF))},
 	}
 
@@ -85,7 +82,7 @@ let a = 4 + 5;
 func TestTokenPosition(t *testing.T) {
 	input := `
 fn Sub(a i32, b i32) : i32 {
-	return a - b;
+	return a - b
 }
 `
 	tests := []struct{
@@ -109,7 +106,6 @@ fn Sub(a i32, b i32) : i32 {
 		{tokenType: token.IDENT, literal: "a", pos: token.Position{Line: 3, Column: 9}},
 		{tokenType: token.MINUS, literal: "-", pos: token.Position{Line: 3, Column: 11}},
 		{tokenType: token.IDENT, literal: "b", pos: token.Position{Line: 3, Column: 13}},
-		{tokenType: token.SEMICOLON, literal: ";", pos: token.Position{Line: 3, Column: 14}},
 		{tokenType: token.RCURLY, literal: "}", pos: token.Position{Line: 4, Column: 1}},
 		{tokenType: token.EOF, literal: string(rune(token.EOF)), pos: token.Position{Line: 5, Column: 1}},
 	}

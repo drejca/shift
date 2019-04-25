@@ -3,7 +3,7 @@ package lexer
 import (
 	"bufio"
 	"bytes"
-	"github.com/drejca/shiftlang/token"
+	"github.com/drejca/shift/token"
 	"io"
 )
 

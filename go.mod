@@ -1,4 +1,4 @@
-module github.com/drejca/shiftlang
+module github.com/drejca/shift
 
 replace github.com/go-interpreter/wagon => github.com/perlin-network/wagon v0.3.1-0.20180825141017-f8cb99b55a39
 

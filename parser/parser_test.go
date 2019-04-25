@@ -2,8 +2,8 @@ package parser
 
 import (
 	"errors"
-	"github.com/drejca/shiftlang/assert"
-	"github.com/drejca/shiftlang/token"
+	"github.com/drejca/shift/assert"
+	"github.com/drejca/shift/token"
 	"strings"
 	"testing"
 )
@@ -11,11 +11,11 @@ import (
 func TestParseFunc(t *testing.T) {
 	input := `
 fn add(a i32, b i32) : i32 {
-	return (a + b);
+	return (a + b)
 }
 fn Calc(a i32, b i32) : i32 {
-	let c = 2;
-	return (add(a, b) + c);
+	let c = 2
+	return (add(a, b) + c)
 }`
 	p := New(strings.NewReader(input))
 	program := p.Parse()
@@ -35,9 +35,9 @@ func TestReturnStatement(t *testing.T) {
 		input string
 		err error
 	} {
-		{input: `return (2 - 1);`},
-		{input: `return (5 + (2 - 1));`},
-		{input: `let a = (5 - 2);`},
+		{input: `return (2 - 1)`},
+		{input: `return (5 + (2 - 1))`},
+		{input: `let a = (5 - 2)`},
 	}
 
 	for _, test := range tests {
@@ -61,8 +61,8 @@ func TestReturnStatementErrors(t *testing.T) {
 		err error
 		pos token.Position
 	} {
-		{input: `return ~2;`, err: errors.New("illegal symbol ~"), pos: token.Position{}},
-		{input: `return 5 + (2 - 1;`, err: errors.New("missing )"), pos: token.Position{}},
+		{input: `return ~2`, err: errors.New("illegal symbol ~"), pos: token.Position{}},
+		{input: `return 5 + (2 - 1`, err: errors.New("missing )"), pos: token.Position{}},
 		{input: `fn Add {}`, err: errors.New("missing ("), pos: token.Position{}},
 		{input: `fn Add( {}`, err: errors.New("missing )"), pos: token.Position{}},
 		{input: `fn Add()`, err: errors.New("missing {"), pos: token.Position{}},

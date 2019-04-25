@@ -3,9 +3,9 @@ package parser
 import (
 	"errors"
 	"fmt"
-	"github.com/drejca/shiftlang/ast"
-	"github.com/drejca/shiftlang/lexer"
-	"github.com/drejca/shiftlang/token"
+	"github.com/drejca/shift/ast"
+	"github.com/drejca/shift/lexer"
+	"github.com/drejca/shift/token"
 	"io"
 	"strconv"
 )

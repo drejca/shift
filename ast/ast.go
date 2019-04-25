@@ -2,7 +2,7 @@ package ast
 
 import (
 	"bytes"
-	"github.com/drejca/shiftlang/token"
+	"github.com/drejca/shift/token"
 	"strings"
 )
 
@@ -134,8 +134,6 @@ func (r *ReturnStatement) String() string {
 		out.WriteString(r.ReturnValue.String())
 	}
 
-	out.WriteString(";")
-
 	return out.String()
 }
 
@@ -157,8 +155,6 @@ func (ls *LetStatement) String() string {
 	if ls.Value != nil {
 		out.WriteString(ls.Value.String())
 	}
-
-	out.WriteString(";")
 
 	return out.String()
 }

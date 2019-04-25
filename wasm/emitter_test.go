@@ -1,7 +1,7 @@
 package wasm
 
 import (
-	"github.com/drejca/shiftlang/parser"
+	"github.com/drejca/shift/parser"
 	"github.com/perlin-network/life/exec"
 	"strings"
 	"testing"
@@ -10,12 +10,12 @@ import (
 func TestEmitter(t *testing.T) {
 	input := `
 fn Calc(a i32, b i32) : i32 {
-	let c = 2;
-	return add(a, b) + c;
+	let c = 2
+	return add(a, b) + c
 }
 
 fn add(a i32, b i32) : i32 {
-	return a + b;
+	return a + b
 }
 `
 	p := parser.New(strings.NewReader(input))
@@ -27,6 +27,7 @@ fn add(a i32, b i32) : i32 {
 	for _, err := range compiler.Errors() {
 		t.Error(err)
 	}
+	
 
 	emitter := NewEmitter()
 	err := emitter.Emit(module)
