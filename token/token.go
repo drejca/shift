@@ -70,7 +70,6 @@ var tokens = map[Type]string {
 	LCURLY: "{",
 	RCURLY: "}",
 
-
 	// Operators
 	PLUS: "+",
 	MINUS: "-",

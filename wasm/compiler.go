@@ -112,8 +112,12 @@ func (c *Compiler) CompileExpression(node ast.Node) []Operation {
 		return c.CompileExpression(node.ReturnValue)
 	case *ast.LetStatement:
 		return c.CompileLetStatement(node, c.functionBody)
+	case *ast.ExpressionStatement:
+		return c.CompileExpression(node.Expression)
 	case *ast.CallExpression:
 		return c.CompileCallExpression(node, c.typeSection)
+	case *ast.AssignmentExpression:
+		return c.CompileAssignmentExpression(node)
 	case *ast.Identifier:
 		return c.CompileIdentifier(node)
 	case *ast.IntegerLiteral:
@@ -167,14 +171,32 @@ func (c *Compiler) CompileCallExpression(callExpression *ast.CallExpression, typ
 	return operations
 }
 
+func (c *Compiler) CompileAssignmentExpression(assignmentExpression *ast.AssignmentExpression) []Operation {
+	var operations []Operation
+
+	symbol, ok := c.symbolTable.Resolve(assignmentExpression.Identifier.String())
+	if !ok {
+		c.handleError(fmt.Errorf("variable %s is undefined", assignmentExpression.Identifier.String()))
+		return operations
+	}
+
+	expressionOperations := c.CompileExpression(assignmentExpression.Expression)
+	operations = append(operations, expressionOperations...)
+
+	setLocal := &SetLocal{name: symbol.Name, localIndex: symbol.Index}
+	operations = append(operations, setLocal)
+
+	return operations
+}
+
 func (c *Compiler) CompileInfixExpression(infixExpression *ast.InfixExpression) []Operation {
 	var operations []Operation
 
-	operation := c.CompileExpression(infixExpression.Left)
-	operations = append(operations, operation...)
+	expressionOperations := c.CompileExpression(infixExpression.Left)
+	operations = append(operations, expressionOperations...)
 
-	operation = c.CompileExpression(infixExpression.Right)
-	operations = append(operations, operation...)
+	expressionOperations = c.CompileExpression(infixExpression.Right)
+	operations = append(operations, expressionOperations...)
 
 	switch infixExpression.Operator {
 	case "+":

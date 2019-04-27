@@ -11,6 +11,7 @@ func TestEmitter(t *testing.T) {
 	input := `
 fn Calc(a i32, b i32) : i32 {
 	let c = 2
+	c = c + a
 	return add(a, b) + c
 }
 
@@ -51,7 +52,7 @@ fn add(a i32, b i32) : i32 {
 		panic(err)
 	}
 
-	expect := int64(14)
+	expect := int64(19)
 	if ret != expect {
 		t.Errorf("expected %d but got %d", expect, ret)
 	}

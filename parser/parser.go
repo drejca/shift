@@ -82,7 +82,7 @@ func (p *Parser) parseStatement() ast.Statement {
 	case token.LET:
 		return p.parseLetStatement()
 	default:
-		return nil
+		return p.parseExpressionStatement()
 	}
 }
 
@@ -208,6 +208,35 @@ func (p *Parser) parseLetStatement() *ast.LetStatement {
 		p.nextToken()
 	}
 
+	return stmt
+}
+
+func (p *Parser) parseExpressionStatement() *ast.ExpressionStatement {
+	stmt := &ast.ExpressionStatement{Token: p.curToken}
+
+	if p.curTokenIs(token.IDENT) && p.peekTokenIs(token.ASSIGN) {
+		stmt.Expression = p.parseAssignmentExpression()
+	}
+
+	if p.peekTokenIs(token.SEMICOLON) {
+		p.nextToken()
+	}
+	return stmt
+}
+
+func (p *Parser) parseAssignmentExpression() ast.Expression {
+	stmt := &ast.AssignmentExpression{
+		Token: p.curToken,
+		Identifier: p.parseIdentifier(),
+	}
+	p.nextToken()
+	p.nextToken()
+
+	stmt.Expression = p.parseExpression(LOWEST)
+
+	if p.peekTokenIs(token.SEMICOLON) {
+		p.nextToken()
+	}
 	return stmt
 }
 
