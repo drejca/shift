@@ -32,10 +32,10 @@ func (c *Compiler) CompileProgram(program *ast.Program) *Module {
 			module.functionSection.count++
 			module.functionSection.typesIdx = append(module.functionSection.typesIdx, functionIndex)
 
-			funcType := c.CompileFunctionSignature(function, functionIndex)
+			funcType := c.compileFunctionSignature(function, functionIndex)
 
 			if funcType.name[0] >= 'A' && funcType.name[0] <= 'Z' {
-				c.appendExportEntry(module, funcType)
+				appendExportEntry(module, funcType)
 			}
 			c.appendFunctionType(module, funcType)
 
@@ -46,15 +46,15 @@ func (c *Compiler) CompileProgram(program *ast.Program) *Module {
 	for _, stmt := range program.Statements {
 		function, ok := stmt.(*ast.Function)
 		if ok {
-			funcBody := c.CompileFunctionBody(function, module.typeSection)
-			c.appendCodeSection(module, funcBody)
+			funcBody := c.compileFunctionBody(function, module.typeSection)
+			appendCodeSection(module, funcBody)
 		}
 	}
 
 	return module
 }
 
-func (c *Compiler) CompileFunctionSignature(function *ast.Function, functionIndex uint32) *FuncType {
+func (c *Compiler) compileFunctionSignature(function *ast.Function, functionIndex uint32) *FuncType {
 	funcType := &FuncType{
 		functionIndex: functionIndex,
 		name: function.Name,
@@ -79,10 +79,10 @@ func (c *Compiler) CompileFunctionSignature(function *ast.Function, functionInde
 	return funcType
 }
 
-func (c *Compiler) CompileFunctionBody(function *ast.Function, typeSection *TypeSection) *FunctionBody {
+func (c *Compiler) compileFunctionBody(function *ast.Function, typeSection *TypeSection) *FunctionBody {
 	c.functionBody = &FunctionBody{}
 
-	funcType, found := c.getFunctionType(typeSection, function.Name)
+	funcType, found := getFunctionType(typeSection, function.Name)
 	if !found {
 		c.errors = append(c.errors, fmt.Errorf("function type for %s not found", function.Name))
 		return nil
@@ -96,7 +96,7 @@ func (c *Compiler) CompileFunctionBody(function *ast.Function, typeSection *Type
 	}
 
 	for _, stmt := range function.Body.Statements {
-		operations := c.CompileExpression(stmt)
+		operations := c.compileExpression(stmt)
 		c.functionBody.code = append(c.functionBody.code, operations...)
 	}
 
@@ -104,22 +104,22 @@ func (c *Compiler) CompileFunctionBody(function *ast.Function, typeSection *Type
 	return c.functionBody
 }
 
-func (c *Compiler) CompileExpression(node ast.Node) []Operation {
+func (c *Compiler) compileExpression(node ast.Node) []Operation {
 	switch node := node.(type) {
 	case *ast.InfixExpression:
-		return c.CompileInfixExpression(node)
+		return c.compileInfixExpression(node)
 	case *ast.ReturnStatement:
-		return c.CompileExpression(node.ReturnValue)
+		return c.compileExpression(node.ReturnValue)
 	case *ast.LetStatement:
-		return c.CompileLetStatement(node, c.functionBody)
+		return c.compileLetStatement(node, c.functionBody)
 	case *ast.ExpressionStatement:
-		return c.CompileExpression(node.Expression)
+		return c.compileExpression(node.Expression)
 	case *ast.CallExpression:
-		return c.CompileCallExpression(node, c.typeSection)
+		return c.compileCallExpression(node, c.typeSection)
 	case *ast.AssignmentExpression:
-		return c.CompileAssignmentExpression(node)
+		return c.compileAssignmentExpression(node)
 	case *ast.Identifier:
-		return c.CompileIdentifier(node)
+		return c.compileIdentifier(node)
 	case *ast.IntegerLiteral:
 		constInt := &ConstInt{value: node.Value, typeName: "i32"}
 		return []Operation{constInt}
@@ -128,12 +128,12 @@ func (c *Compiler) CompileExpression(node ast.Node) []Operation {
 	return []Operation{}
 }
 
-func (c *Compiler) CompileLetStatement(letStatement *ast.LetStatement, functionBody *FunctionBody) []Operation {
+func (c *Compiler) compileLetStatement(letStatement *ast.LetStatement, functionBody *FunctionBody) []Operation {
 	var operations []Operation
 
 	symbol := c.symbolTable.Define(letStatement.Name.Value, c.inferType(letStatement.Value))
 
-	expressionOps := c.CompileExpression(letStatement.Value)
+	expressionOps := c.compileExpression(letStatement.Value)
 	operations = append(operations, expressionOps...)
 
 	if symbol.Scope == GlobalScope {
@@ -150,12 +150,12 @@ func (c *Compiler) CompileLetStatement(letStatement *ast.LetStatement, functionB
 	return operations
 }
 
-func (c *Compiler) CompileCallExpression(callExpression *ast.CallExpression, typeSection *TypeSection) []Operation {
+func (c *Compiler) compileCallExpression(callExpression *ast.CallExpression, typeSection *TypeSection) []Operation {
 	var operations []Operation
 
 	funcName := callExpression.Function.String()
 
-	funcType, found := c.getFunctionType(typeSection, funcName)
+	funcType, found := getFunctionType(typeSection, funcName)
 	if !found {
 		c.errors = append(c.errors, fmt.Errorf("function type for %s not found", funcName))
 		return nil
@@ -164,14 +164,14 @@ func (c *Compiler) CompileCallExpression(callExpression *ast.CallExpression, typ
 	call := &Call{functionIndex: funcType.functionIndex, name: funcName}
 
 	for _, arg := range callExpression.Arguments {
-		operations := c.CompileExpression(arg)
+		operations := c.compileExpression(arg)
 		call.arguments = append(call.arguments, operations...)
 	}
 	operations = append(operations, call)
 	return operations
 }
 
-func (c *Compiler) CompileAssignmentExpression(assignmentExpression *ast.AssignmentExpression) []Operation {
+func (c *Compiler) compileAssignmentExpression(assignmentExpression *ast.AssignmentExpression) []Operation {
 	var operations []Operation
 
 	symbol, ok := c.symbolTable.Resolve(assignmentExpression.Identifier.String())
@@ -180,7 +180,7 @@ func (c *Compiler) CompileAssignmentExpression(assignmentExpression *ast.Assignm
 		return operations
 	}
 
-	expressionOperations := c.CompileExpression(assignmentExpression.Expression)
+	expressionOperations := c.compileExpression(assignmentExpression.Expression)
 	operations = append(operations, expressionOperations...)
 
 	setLocal := &SetLocal{name: symbol.Name, localIndex: symbol.Index}
@@ -189,22 +189,22 @@ func (c *Compiler) CompileAssignmentExpression(assignmentExpression *ast.Assignm
 	return operations
 }
 
-func (c *Compiler) CompileInfixExpression(infixExpression *ast.InfixExpression) []Operation {
+func (c *Compiler) compileInfixExpression(infixExpression *ast.InfixExpression) []Operation {
 	var operations []Operation
 
-	expressionOperations := c.CompileExpression(infixExpression.Left)
+	expressionOperations := c.compileExpression(infixExpression.Left)
 	operations = append(operations, expressionOperations...)
 
-	expressionOperations = c.CompileExpression(infixExpression.Right)
+	expressionOperations = c.compileExpression(infixExpression.Right)
 	operations = append(operations, expressionOperations...)
 
 	switch infixExpression.Operator {
 	case "+":
-		operation, err := c.sumTypes(infixExpression.Left, infixExpression.Right)
+		operation, err := sumTypes(infixExpression.Left, infixExpression.Right)
 		c.handleError(err)
 		operations = append(operations, operation)
 	case "-":
-		operation, err := c.subtractTypes(infixExpression.Left, infixExpression.Right)
+		operation, err := subtractTypes(infixExpression.Left, infixExpression.Right)
 		c.handleError(err)
 		operations = append(operations, operation)
 	default:
@@ -213,17 +213,17 @@ func (c *Compiler) CompileInfixExpression(infixExpression *ast.InfixExpression) 
 	return operations
 }
 
-func (c *Compiler) CompileIdentifier(identifier *ast.Identifier) []Operation {
+func (c *Compiler) compileIdentifier(identifier *ast.Identifier) []Operation {
 	symbol, ok := c.symbolTable.Resolve(identifier.Value)
 	if !ok {
 		c.handleError(fmt.Errorf("undefined variable %s", identifier.Value))
 		return []Operation{}
 	}
-	operation := c.loadSymbol(symbol)
+	operation := loadSymbol(symbol)
 	return []Operation{operation}
 }
 
-func (c *Compiler) getFunctionType(typeSection *TypeSection, funcName string) (funcType *FuncType, found bool) {
+func getFunctionType(typeSection *TypeSection, funcName string) (funcType *FuncType, found bool) {
 	for _, entry := range typeSection.entries {
 		if entry.name == funcName {
 			return entry, true
@@ -232,7 +232,7 @@ func (c *Compiler) getFunctionType(typeSection *TypeSection, funcName string) (f
 	return nil, false
 }
 
-func (c *Compiler) appendExportEntry(module *Module, funcType *FuncType) {
+func appendExportEntry(module *Module, funcType *FuncType) {
 	if module.exportSection == nil {
 		module.exportSection = &ExportSection{}
 	}
@@ -251,7 +251,7 @@ func (c *Compiler) appendFunctionType(module *Module, funcType *FuncType) {
 	module.typeSection.count++
 }
 
-func (c *Compiler) appendCodeSection(module *Module, funcBody *FunctionBody) {
+func appendCodeSection(module *Module, funcBody *FunctionBody) {
 	if module.codeSection == nil {
 		module.codeSection = &CodeSection{}
 	}
@@ -259,7 +259,7 @@ func (c *Compiler) appendCodeSection(module *Module, funcBody *FunctionBody) {
 	module.codeSection.count++
 }
 
-func (c *Compiler) appendOperation(functionBody *FunctionBody, operation Operation) {
+func appendOperation(functionBody *FunctionBody, operation Operation) {
 	if operation != nil {
 		functionBody.code = append(functionBody.code, operation)
 	}
@@ -271,7 +271,7 @@ func (c *Compiler) handleError(err error) {
 	}
 }
 
-func (c *Compiler) FunctionSymbol(callExpression ast.Node) (symbol Symbol, found bool) {
+func (c *Compiler) functionSymbol(callExpression ast.Node) (symbol Symbol, found bool) {
 	switch node := callExpression.(type) {
 	case *ast.Identifier:
 		return c.symbolTable.Resolve(node.Value)
@@ -282,14 +282,25 @@ func (c *Compiler) FunctionSymbol(callExpression ast.Node) (symbol Symbol, found
 }
 
 func (c *Compiler) inferType(expression ast.Expression) string {
-	return "i32"
+	switch node := expression.(type) {
+	case *ast.CallExpression:
+		funcType, found := getFunctionType(c.typeSection, node.Token.Lit)
+		if !found {
+			c.errors = append(c.errors, fmt.Errorf("function type for %s not found", node.Token.Lit))
+			return "unknown"
+		}
+		return funcType.resultType.typeName
+	case *ast.IntegerLiteral:
+		return "i32"
+	}
+	return "unknown"
 }
 
-func (c *Compiler) sumTypes(left ast.Node, right ast.Node) (Operation, error) {
+func sumTypes(left ast.Node, right ast.Node) (Operation, error) {
 	return &Add{}, nil
 }
 
-func (c *Compiler) subtractTypes(left ast.Node, right ast.Node) (Operation, error) {
+func subtractTypes(left ast.Node, right ast.Node) (Operation, error) {
 	return &Sub{}, nil
 }
 
@@ -301,7 +312,7 @@ func (c *Compiler) leaveScope() {
 	c.symbolTable = c.symbolTable.Outer
 }
 
-func (c *Compiler) loadSymbol(s Symbol) Operation {
+func loadSymbol(s Symbol) Operation {
 	switch s.Scope {
 	case LocalScope:
 		getLocal := &GetLocal{name: s.Name, localIndex: s.Index}

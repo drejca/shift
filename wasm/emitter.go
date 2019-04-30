@@ -128,6 +128,9 @@ func (e *Emmiter) typeOpCode(typeName string) byte {
 	switch typeName {
 	case "i32":
 		return TYPE_I32
+	case "int":
+	case "i64":
+		return TYPE_I64
 	}
 	e.errors = append(e.errors, fmt.Errorf("unknown type %q", typeName))
 	return ZERO

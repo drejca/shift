@@ -24,6 +24,7 @@ const (
 
 	// Language Types
 	TYPE_I32 = 0x7f
+	TYPE_I64 = 0x7e
 	FUNC = 0x60
 
 	// Variable access
