@@ -1,7 +1,6 @@
 package parser
 
 import (
-	"errors"
 	"fmt"
 	"github.com/drejca/shift/ast"
 	"github.com/drejca/shift/lexer"
@@ -34,7 +33,18 @@ type Parser struct {
 	prefixParseFns map[token.Type]prefixParseFn
 	infixParseFns  map[token.Type]infixParseFn
 
-	errors []error
+	errors []token.CompileError
+}
+
+type ParseError struct {
+	position token.Position
+	error error
+}
+func (p ParseError) Position() token.Position {
+	return p.position
+}
+func (p ParseError) Error() error {
+	return p.error
 }
 
 type (
@@ -60,7 +70,7 @@ func New(input io.Reader) *Parser {
 	return p
 }
 
-func (p *Parser) Parse() *ast.Program {
+func (p *Parser) ParseProgram() *ast.Program {
 	program := &ast.Program{}
 
 	for p.curToken.Type != token.EOF {
@@ -98,15 +108,23 @@ func (p *Parser) parseFunc() *ast.Function {
 	}
 
 	if p.peekTokenIs(token.IDENT) {
-		fn.InputParams = p.parseInputParameters()
-	} else if !p.expectPeek(token.RPAREN) {
+		inputParams := p.parseInputParameters()
+		if fn.InputParams != nil {
+			return nil
+		}
+		fn.InputParams = inputParams
+	}
+
+	if !p.expectPeek(token.RPAREN) {
 		return nil
 	}
 
 	if p.peekTokenIs(token.COLON) {
 		p.nextToken()
 		fn.ReturnParams = p.parseReturnParameters()
-	} else if !p.expectPeek(token.LCURLY) {
+	}
+
+	if !p.expectPeek(token.LCURLY) {
 		return nil
 	}
 
@@ -118,42 +136,65 @@ func (p *Parser) parseFunc() *ast.Function {
 func (p *Parser) parseInputParameters() []*ast.Parameter {
 	var inputParams []*ast.Parameter
 
-	for {
+	if p.peekTokenIs(token.RPAREN) {
 		p.nextToken()
-
-		if p.curTokenIs(token.RPAREN) {
-			return inputParams
-		}
-
-		param := &ast.Parameter{}
-		if p.curTokenIs(token.IDENT) {
-			param.Ident = &ast.Identifier{Value: p.curToken.Lit}
-		}
-		p.nextToken()
-		if p.curTokenIs(token.IDENT) {
-			param.Type = p.curToken.Lit
-		}
-		if p.peekTokenIs(token.COMMA) {
-			p.nextToken()
-		}
-		inputParams = append(inputParams, param)
+		return inputParams
 	}
+
+	param := p.parseInputParam()
+	if param != nil {
+		inputParams = append(inputParams, param)
+	} else {
+		return nil
+	}
+
+	for p.peekTokenIs(token.COMMA) {
+		p.nextToken()
+
+		param := p.parseInputParam()
+		if param != nil {
+			inputParams = append(inputParams, param)
+		} else {
+			return nil
+		}
+	}
+	return inputParams
+}
+
+func (p *Parser) parseInputParam() *ast.Parameter {
+	param := &ast.Parameter{}
+	if p.peekTokenIs(token.IDENT) {
+		param.Ident = &ast.Identifier{Value: p.peekToken.Lit}
+	} else {
+		p.parseError(fmt.Errorf("trailing comma in parameters"), p.peekToken)
+		return nil
+	}
+	p.nextToken()
+
+	if p.peekTokenIs(token.IDENT) {
+		param.Type = p.peekToken.Lit
+	} else {
+		p.parseError(fmt.Errorf("missing function parameter type"), p.peekToken)
+		return nil
+	}
+	p.nextToken()
+
+	return param
 }
 
 func (p *Parser) parseReturnParameters() *ast.ReturnParamGroup {
 	paramGroup := &ast.ReturnParamGroup{}
 
-	for {
-		p.nextToken()
+	p.nextToken()
 
-		if p.curTokenIs(token.LCURLY) {
-			return paramGroup
-		}
-
-		if p.curTokenIs(token.IDENT) {
-			paramGroup.Params = append(paramGroup.Params, &ast.Parameter{Type: p.curToken.Lit})
-		}
+	if p.curTokenIs(token.IDENT) {
+		paramGroup.Params = append(paramGroup.Params, &ast.Parameter{Type: p.curToken.Lit})
 	}
+
+	if p.peekTokenIs(token.LCURLY) {
+		return paramGroup
+	}
+	return nil
 }
 
 func (p *Parser) parseBlockStatement() *ast.BlockStatement {
@@ -243,7 +284,7 @@ func (p *Parser) parseAssignmentExpression() ast.Expression {
 func (p *Parser) parseExpression(precedence int) ast.Expression {
 	prefix := p.prefixParseFns[p.curToken.Type]
 	if prefix == nil {
-		p.noPrefixParseFnError()
+		p.parseError(fmt.Errorf("illegal symbol %s", p.curToken.Lit), p.curToken)
 		return nil
 	}
 	leftExp := prefix()
@@ -338,17 +379,20 @@ func (p *Parser) parseIntegerLiteral() ast.Expression {
 
 	value, err := strconv.ParseInt(p.curToken.Lit, 0, 64)
 	if err != nil {
-		msg := fmt.Sprintf("could not parse %q as integer", p.curToken.Lit)
-		p.errors = append(p.errors, errors.New(msg))
+		p.parseError(fmt.Errorf("could not parse %q as integer", p.curToken.Lit), p.curToken)
 		return nil
 	}
 	lit.Value = value
 	return lit
 }
 
-func (p *Parser) noPrefixParseFnError() {
-	err := fmt.Errorf("illegal symbol %s", p.curToken.Lit)
-	p.errors = append(p.errors, err)
+func (p *Parser) expectToken(tokenType token.Type) bool {
+	if p.curTokenIs(tokenType) {
+		return true
+	} else {
+		p.error(tokenType)
+		return false
+	}
 }
 
 func (p *Parser) expectPeek(tokenType token.Type) bool {
@@ -372,9 +416,18 @@ func (p *Parser) peekTokenIs(tokenType token.Type) bool {
 	return p.peekToken.Type == tokenType
 }
 
+func (p *Parser) error(tokenType token.Type) {
+	err := fmt.Errorf("missing %s", token.Print(tokenType))
+	p.errors = append(p.errors, ParseError{position: p.curToken.Pos, error: err})
+}
+
 func (p *Parser) peekError(tokenType token.Type) {
 	err := fmt.Errorf("missing %s", token.Print(tokenType))
-	p.errors = append(p.errors, err)
+	p.errors = append(p.errors, ParseError{position: p.peekToken.Pos, error: err})
+}
+
+func (p *Parser) parseError(err error, tok token.Token) {
+	p.errors = append(p.errors, ParseError{position: tok.Pos, error: err})
 }
 
 func (p *Parser) nextToken() {

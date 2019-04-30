@@ -20,6 +20,11 @@ type Expression interface {
 	expressionNode()
 }
 
+type ProgramError interface {
+	Error() error
+	Position() token.Position
+}
+
 type Program struct {
 	Statements []Statement
 }

@@ -20,10 +20,10 @@ fn add(a i32, b i32) : i32 {
 }
 `
 	p := parser.New(strings.NewReader(input))
-	program := p.Parse()
+	program := p.ParseProgram()
 
 	compiler := New()
-	module := compiler.CompileProgram(program)
+	wasmModule := compiler.CompileProgram(program)
 
 	for _, err := range compiler.Errors() {
 		t.Error(err)
@@ -48,7 +48,7 @@ fn add(a i32, b i32) : i32 {
 	(export "Calc" (func $Calc))
 )`
 
-	err := assert.EqualString(expected, "\n"+module.String())
+	err := assert.EqualString(expected, "\n"+wasmModule.String())
 	if err != nil {
 		t.Error(err)
 	}

@@ -20,18 +20,17 @@ fn add(a i32, b i32) : i32 {
 }
 `
 	p := parser.New(strings.NewReader(input))
-	program := p.Parse()
+	program := p.ParseProgram()
 
 	compiler := New()
-	module := compiler.CompileProgram(program)
+	wasmModule := compiler.CompileProgram(program)
 
 	for _, err := range compiler.Errors() {
 		t.Error(err)
 	}
-	
 
 	emitter := NewEmitter()
-	err := emitter.Emit(module)
+	err := emitter.Emit(wasmModule)
 	if err != nil {
 		t.Error(err)
 	}

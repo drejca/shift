@@ -11,6 +11,11 @@ type Position struct {
 	Column   int    // column number, starting at 1
 }
 
+type CompileError interface {
+	Error() error
+	Position() Position
+}
+
 type Type int
 
 const(
