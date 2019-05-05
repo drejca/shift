@@ -14,7 +14,7 @@ type Compiler struct {
 	errors []error
 }
 
-func New() *Compiler {
+func NewCompiler() *Compiler {
 	return &Compiler{
 		symbolTable: NewSymbolTable(),
 	}

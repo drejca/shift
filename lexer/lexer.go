@@ -31,10 +31,20 @@ func (l *Lexer) NextToken() token.Token {
 	if isNewLine(ch) {
 		l.pos.Line++
 		l.pos.Column = 1
+		l.skipNewLine()
 		return l.NextToken()
 	}
+	if ch == '\r' {
+		l.pos.Line++
+		l.pos.Column = 1
+		ch = l.read()
+		if ch == '\n' {
+			return l.NextToken()
+		}
+	}
 	if isWhitespace(ch) {
-		ch = l.skipWhitespace()
+		l.skipWhitespace()
+		return l.NextToken()
 	}
 	if isLetter(ch) {
 		l.unread()
@@ -73,12 +83,22 @@ func (l *Lexer) NextToken() token.Token {
 	}
 }
 
-func (l *Lexer) skipWhitespace() rune {
+func (l *Lexer) skipNewLine() {
+	l.ident.Reset()
+	ch := l.read()
+	if ch != '\n' {
+		l.unread()
+	}
+	l.ident.Reset()
+}
+
+func (l *Lexer) skipWhitespace() {
 	l.ident.Reset()
 	for {
 		ch := l.read()
 		if !isWhitespace(ch) {
-			return ch
+			l.unread()
+			return
 		}
 	}
 }

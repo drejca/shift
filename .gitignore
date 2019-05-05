@@ -2,3 +2,5 @@
 
 debug.test
 debug.test~
+/*.exe
+/testprogram/*.wasm

@@ -5,4 +5,5 @@ replace github.com/go-interpreter/wagon => github.com/perlin-network/wagon v0.3.
 require (
 	github.com/go-interpreter/wagon v0.3.0 // indirect
 	github.com/perlin-network/life v0.0.0-20190204091834-d05763d11050
+	github.com/urfave/cli v1.20.0 // indirect
 )

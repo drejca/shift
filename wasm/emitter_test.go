@@ -2,7 +2,9 @@ package wasm
 
 import (
 	"github.com/drejca/shift/parser"
+	"github.com/drejca/shift/print"
 	"github.com/perlin-network/life/exec"
+	"os"
 	"strings"
 	"testing"
 )
@@ -15,14 +17,18 @@ fn Calc(a i32, b i32) : i32 {
 	return add(a, b) + c
 }
 
+
 fn add(a i32, b i32) : i32 {
 	return a + b
 }
 `
 	p := parser.New(strings.NewReader(input))
-	program := p.ParseProgram()
+	program, parseErr := p.ParseProgram()
+	if parseErr != nil {
+		t.Fatal(parseErr.Error())
+	}
 
-	compiler := New()
+	compiler := NewCompiler()
 	wasmModule := compiler.CompileProgram(program)
 
 	for _, err := range compiler.Errors() {
@@ -54,5 +60,43 @@ fn add(a i32, b i32) : i32 {
 	expect := int64(19)
 	if ret != expect {
 		t.Errorf("expected %d but got %d", expect, ret)
+	}
+}
+
+func TestCompilingFromFile(t *testing.T) {
+	filename := "../testprogram/main.st"
+
+	file, err := os.Open(filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	p := parser.New(file)
+	program, parseErr := p.ParseProgram()
+
+	file.Close()
+
+	if parseErr != nil {
+		refile, err := os.Open(filename)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		printer := print.New(refile)
+		t.Fatal(printer.PrintError(parseErr))
+	}
+	file.Close()
+
+	compiler := NewCompiler()
+	wasmModule := compiler.CompileProgram(program)
+
+	for _, err := range compiler.Errors() {
+		t.Fatal(err)
+	}
+
+	emitter := NewEmitter()
+	err = emitter.Emit(wasmModule)
+	if err != nil {
+		t.Fatal(err)
 	}
 }

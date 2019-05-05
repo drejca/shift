@@ -27,7 +27,9 @@ func (e *Emmiter) Emit(node Node) error {
 
 		e.Emit(node.typeSection)
 		e.Emit(node.functionSection)
-		e.Emit(node.exportSection)
+		if node.exportSection != nil && node.exportSection.count > 0 {
+			e.Emit(node.exportSection)
+		}
 		e.Emit(node.codeSection)
 	case *TypeSection:
 		e.emit(SECTION_TYPE)
