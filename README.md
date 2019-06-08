@@ -13,6 +13,6 @@ $ go get github.com/drejca/shift/shiftc
 ```
 Build program with shiftc
 ```sh
-$ shiftc build main.st
+$ shiftc build main.sf
 ```
 
