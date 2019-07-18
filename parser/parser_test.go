@@ -56,6 +56,11 @@ fn calc() {
 	let a = (5 - 2)
 }
 `},
+		{input: `
+fn calc() {
+	let a i32 = (5 - 2)
+}
+`},
 	}
 
 	for _, test := range tests {
@@ -143,7 +148,7 @@ func TestParseErrors(t *testing.T) {
 }
 
 func TestReadFromFile(t *testing.T) {
-	filename := "../testprogram/main.st"
+	filename := "../testprogram/main.sf"
 
 	file, err := os.Open(filename)
 	if err != nil {

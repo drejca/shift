@@ -199,17 +199,17 @@ func (p *Parser) parseInputParam() (*ast.Parameter, token.CompileError) {
 	return param, nil
 }
 
-func (p *Parser) parseReturnParameters() (*ast.ReturnParamGroup, token.CompileError) {
-	paramGroup := &ast.ReturnParamGroup{}
+func (p *Parser) parseReturnParameters() ([]*ast.Parameter, token.CompileError) {
+	var params []*ast.Parameter
 
 	p.nextToken()
 
 	if p.curTokenIs(token.IDENT) {
-		paramGroup.Params = append(paramGroup.Params, &ast.Parameter{Type: p.curToken.Lit})
+		params = append(params, &ast.Parameter{Type: p.curToken.Lit})
 	}
 
 	if p.peekTokenIs(token.LCURLY) {
-		return paramGroup, nil
+		return params, nil
 	}
 	return nil, p.peekError(token.LCURLY)
 }
@@ -260,6 +260,7 @@ func (p *Parser) parseLetStatement() (*ast.LetStatement, token.CompileError) {
 	}
 
 	stmt.Name = &ast.Identifier{Token: p.curToken, Value: p.curToken.Lit}
+	stmt.Type = p.parseType()
 
 	if !p.expectPeek(token.ASSIGN) {
 		return nil, p.peekError(token.ASSIGN)
@@ -278,6 +279,14 @@ func (p *Parser) parseLetStatement() (*ast.LetStatement, token.CompileError) {
 	}
 
 	return stmt, nil
+}
+
+func (p* Parser) parseType() string {
+	if p.peekTokenIs(token.IDENT) {
+		p.nextToken()
+		return p.curToken.Lit
+	}
+	return ""
 }
 
 func (p *Parser) parseExpressionStatement() (*ast.ExpressionStatement, token.CompileError) {

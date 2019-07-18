@@ -7,6 +7,36 @@ import (
 	"testing"
 )
 
+func TestCompileMainToString(t *testing.T) {
+	input := `
+fn main() {
+}
+`
+	p := parser.New(strings.NewReader(input))
+	program, parseErr := p.ParseProgram()
+	if parseErr != nil {
+		t.Fatal(parseErr.Error())
+	}
+
+	compiler := NewCompiler()
+	wasmModule := compiler.CompileProgram(program)
+
+	for _, err := range compiler.Errors() {
+		t.Error(err)
+	}
+
+	expected := `
+(module 
+	(func $main )
+	(export "main" (func $main))
+)`
+
+	err := assert.EqualString(expected, "\n"+wasmModule.String())
+	if err != nil {
+		t.Error(err)
+	}
+}
+
 func TestCompileToString(t *testing.T) {
 	input := `
 fn Calc(a i32, b i32) : i32 {

@@ -74,7 +74,9 @@ func (e *Emmiter) Emit(node Node) error {
 			e.Emit(valueType)
 		}
 		e.emit(byte(node.resultCount))
-		e.Emit(node.resultType)
+		if node.resultType != nil {
+			e.Emit(node.resultType)
+		}
 	case *ConstInt:
 		e.emit(CONST_I32)
 		e.emit(byte(node.value))

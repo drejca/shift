@@ -34,7 +34,7 @@ func (c *Compiler) CompileProgram(program *ast.Program) *Module {
 
 			funcType := c.compileFunctionSignature(function, functionIndex)
 
-			if funcType.name[0] >= 'A' && funcType.name[0] <= 'Z' {
+			if (funcType.name[0] >= 'A' && funcType.name[0] <= 'Z') || funcType.name == "main"  {
 				appendExportEntry(module, funcType)
 			}
 			c.appendFunctionType(module, funcType)
@@ -66,11 +66,11 @@ func (c *Compiler) compileFunctionSignature(function *ast.Function, functionInde
 		funcType.paramCount++
 	}
 
-	if len(function.ReturnParams.Params) > 1 {
+	if len(function.ReturnParams) > 1 {
 		c.errors = append(c.errors, fmt.Errorf("fn %s(...) : (...) multiple return types is not implemented", function.Name))
 	}
 
-	for _, param := range function.ReturnParams.Params {
+	for _, param := range function.ReturnParams {
 		resultType := &ResultType{typeName: param.Type}
 		funcType.resultType = resultType
 		funcType.resultCount = 1
@@ -257,12 +257,6 @@ func appendCodeSection(module *Module, funcBody *FunctionBody) {
 	}
 	module.codeSection.bodies = append(module.codeSection.bodies, funcBody)
 	module.codeSection.count++
-}
-
-func appendOperation(functionBody *FunctionBody, operation Operation) {
-	if operation != nil {
-		functionBody.code = append(functionBody.code, operation)
-	}
 }
 
 func (c *Compiler) handleError(err error) {

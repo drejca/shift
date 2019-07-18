@@ -9,6 +9,47 @@ import (
 	"testing"
 )
 
+func TestEmptyMain(t *testing.T) {
+	input := `
+fn main() {
+}
+`
+	p := parser.New(strings.NewReader(input))
+	program, parseErr := p.ParseProgram()
+	if parseErr != nil {
+		t.Fatal(parseErr.Error())
+	}
+
+	compiler := NewCompiler()
+	wasmModule := compiler.CompileProgram(program)
+
+	for _, err := range compiler.Errors() {
+		t.Error(err)
+	}
+
+	emitter := NewEmitter()
+	err := emitter.Emit(wasmModule)
+	if err != nil {
+		t.Error(err)
+	}
+
+	vm, err := exec.NewVirtualMachine(emitter.Bytes(), exec.VMConfig{}, &exec.NopResolver{}, nil)
+	if err != nil {
+		panic(err)
+	}
+
+	entryID, ok := vm.GetFunctionExport("main")
+	if !ok {
+		panic("entry function not found")
+	}
+
+	_, err = vm.Run(entryID)
+	if err != nil {
+		vm.PrintStackTrace()
+		panic(err)
+	}
+}
+
 func TestEmitter(t *testing.T) {
 	input := `
 fn Calc(a i32, b i32) : i32 {
@@ -16,7 +57,6 @@ fn Calc(a i32, b i32) : i32 {
 	c = c + a
 	return add(a, b) + c
 }
-
 
 fn add(a i32, b i32) : i32 {
 	return a + b
@@ -64,7 +104,7 @@ fn add(a i32, b i32) : i32 {
 }
 
 func TestCompilingFromFile(t *testing.T) {
-	filename := "../testprogram/main.st"
+	filename := "../testprogram/main.sf"
 
 	file, err := os.Open(filename)
 	if err != nil {
