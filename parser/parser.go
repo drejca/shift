@@ -56,6 +56,7 @@ func New(input io.Reader) *Parser {
 	p.prefixParseFns = make(map[token.Type]prefixParseFn)
 	p.registerPrefix(token.IDENT, p.parseIdentifier)
 	p.registerPrefix(token.INT, p.parseIntegerLiteral)
+	p.registerPrefix(token.FLOAT, p.parseFloatLiteral)
 	p.registerPrefix(token.LPAREN, p.parseGroupedExpression)
 
 	p.infixParseFns = make(map[token.Type]infixParseFn)
@@ -456,6 +457,17 @@ func (p *Parser) parseIntegerLiteral() (ast.Expression, token.CompileError) {
 	lit := &ast.IntegerLiteral{Token: p.curToken}
 
 	value, err := strconv.ParseInt(p.curToken.Lit, 0, 64)
+	if err != nil {
+		return nil, p.parseError(fmt.Errorf("could not parse %q as integer", p.curToken.Lit), p.curToken, p.curToken.Pos.Column)
+	}
+	lit.Value = value
+	return lit, nil
+}
+
+func (p *Parser) parseFloatLiteral() (ast.Expression, token.CompileError) {
+	lit := &ast.FloatLiteral{Token: p.curToken}
+
+	value, err := strconv.ParseFloat(p.curToken.Lit, 64)
 	if err != nil {
 		return nil, p.parseError(fmt.Errorf("could not parse %q as integer", p.curToken.Lit), p.curToken, p.curToken.Pos.Column)
 	}

@@ -28,6 +28,7 @@ fn Add(a i32, b i32) : i32 {
 }~
 2 - 1
 let a = 4 + 5
+let f = 0.6
 `
 
 	tests := []struct {
@@ -43,6 +44,7 @@ let a = 4 + 5
 		{tokenType: token.IDENT, literal: "b"},
 		{tokenType: token.IDENT, literal: "i32"},
 		{tokenType: token.RPAREN, literal: ")"},
+		// 10
 		{tokenType: token.COLON, literal: ":"},
 		{tokenType: token.IDENT, literal: "i32"},
 		{tokenType: token.LCURLY, literal: "{"},
@@ -53,6 +55,7 @@ let a = 4 + 5
 		{tokenType: token.RCURLY, literal: "}"},
 		{tokenType: token.ILLEGAL, literal: "~"},
 		{tokenType: token.INT, literal: "2"},
+		// 20
 		{tokenType: token.MINUS, literal: "-"},
 		{tokenType: token.INT, literal: "1"},
 		{tokenType: token.LET, literal: "let"},
@@ -61,6 +64,11 @@ let a = 4 + 5
 		{tokenType: token.INT, literal: "4"},
 		{tokenType: token.PLUS, literal: "+"},
 		{tokenType: token.INT, literal: "5"},
+		{tokenType: token.LET, literal: "let"},
+		{tokenType: token.IDENT, literal: "f"},
+		// 30
+		{tokenType: token.ASSIGN, literal: "="},
+		{tokenType: token.FLOAT, literal: "0.6"},
 		{tokenType: token.EOF, literal: string(rune(token.EOF))},
 	}
 
@@ -70,11 +78,11 @@ let a = 4 + 5
 		tok := lex.NextToken()
 
 		if tok.Type != test.tokenType {
-			t.Errorf("tests[%d] - wrong type. Expected %q but got %q", i, token.Print(test.tokenType), token.Print(tok.Type))
+			t.Errorf("tests[%d] - wrong type. Expected %q but got %q", i+1, token.Print(test.tokenType), token.Print(tok.Type))
 		}
 
 		if tok.Lit != test.literal {
-			t.Errorf("tests[%d] - wrong literal. Expected %q but got %q", i, test.literal, tok.Lit)
+			t.Errorf("tests[%d] - wrong literal. Expected %q but got %q", i+1, test.literal, tok.Lit)
 		}
 	}
 }

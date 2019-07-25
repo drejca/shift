@@ -123,6 +123,11 @@ func (l *Lexer) readNumber() token.Token {
 	l.number.Reset()
 	for {
 		ch := l.read()
+
+		if ch == '.' {
+			return l.readFloat()
+		}
+
 		if !isDigit(ch) {
 			l.unread()
 			break
@@ -130,6 +135,21 @@ func (l *Lexer) readNumber() token.Token {
 		l.number.WriteRune(ch)
 	}
 	tok := l.Token(token.INT, l.number.String())
+	return tok
+}
+
+func (l *Lexer) readFloat() token.Token {
+	l.number.WriteRune('.')
+	for {
+		ch := l.read()
+
+		if !isDigit(ch) {
+			l.unread()
+			break
+		}
+		l.number.WriteRune(ch)
+	}
+	tok := l.Token(token.FLOAT, l.number.String())
 	return tok
 }
 

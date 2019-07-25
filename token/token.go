@@ -28,6 +28,7 @@ const(
 	// Identifiers + literals
 	IDENT
 	INT
+	FLOAT
 
 	// Keywords
 	FUNC
@@ -59,6 +60,7 @@ var tokens = map[Type]string {
 	// Identifiers + literals
 	IDENT: "IDENT",
 	INT: "INT",
+	FLOAT: "FLOAT",
 
 	// Keywords
 	FUNC: "FUNC",

@@ -61,6 +61,7 @@ fn calc() {
 	let a i32 = (5 - 2)
 }
 `},
+		{input: `let a = 0.6`},
 	}
 
 	for _, test := range tests {

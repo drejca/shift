@@ -245,3 +245,11 @@ type IntegerLiteral struct {
 
 func (i *IntegerLiteral) expressionNode() {}
 func (i *IntegerLiteral) String() string  { return i.Token.Lit }
+
+type FloatLiteral struct {
+	Token token.Token
+	Value float64
+}
+
+func (f *FloatLiteral) expressionNode() {}
+func (f *FloatLiteral) String() string  { return f.Token.Lit }
