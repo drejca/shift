@@ -13,6 +13,13 @@ import (
 
 func TestParseFunc(t *testing.T) {
 	input := `
+import fn assert(expected i32, actual i32)
+
+fn main() {
+	let res = Calc(7, 5)
+	assert(res)
+}
+
 fn Calc(a i32, b i32) : i32 {
 	let c = 2
 	c = (c + a)
@@ -27,7 +34,8 @@ fn add(a i32, b i32) : i32 {
 	program, compilerError := p.ParseProgram()
 
 	if compilerError != nil {
-		t.Fatal(compilerError.Error())
+		printer := print.New(strings.NewReader(input))
+		t.Fatal(printer.PrintError(compilerError))
 	}
 
 	err := assert.EqualString(input, program.String())

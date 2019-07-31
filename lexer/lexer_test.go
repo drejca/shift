@@ -29,6 +29,7 @@ fn Add(a i32, b i32) : i32 {
 2 - 1
 let a = 4 + 5
 let f = 0.6
+import fn log(num i32)
 `
 
 	tests := []struct {
@@ -69,6 +70,13 @@ let f = 0.6
 		// 30
 		{tokenType: token.ASSIGN, literal: "="},
 		{tokenType: token.FLOAT, literal: "0.6"},
+		{tokenType: token.IMPORT, literal: "import"},
+		{tokenType: token.FUNC, literal: "fn"},
+		{tokenType: token.IDENT, literal: "log"},
+		{tokenType: token.LPAREN, literal: "("},
+		{tokenType: token.IDENT, literal: "num"},
+		{tokenType: token.IDENT, literal: "i32"},
+		{tokenType: token.RPAREN, literal: ")"},
 		{tokenType: token.EOF, literal: string(rune(token.EOF))},
 	}
 

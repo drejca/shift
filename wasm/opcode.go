@@ -18,6 +18,7 @@ const (
 
 	// Module sections
 	SECTION_TYPE = 0x01
+	SECTION_IMPORT = 0x02
 	SECTION_FUNC = 0x03
 	SECTION_EXPORT = 0x07
 	SECTION_CODE = 0x0a
@@ -59,6 +60,12 @@ type Section interface {
 	sectionNode()
 }
 
+type Type interface {
+	Node
+	typeNode()
+	TypeIndex() uint32
+}
+
 type Operation interface {
 	Node
 	operationNode()
@@ -66,22 +73,30 @@ type Operation interface {
 
 type Module struct {
 	typeSection *TypeSection
+	importSection *ImportSection
 	functionSection *FunctionSection
 	exportSection *ExportSection
 	codeSection *CodeSection
 }
 func (m *Module) String() string {
 	var out bytes.Buffer
-	out.WriteString("(module \n")
+	out.WriteString("(module ")
 
-	for i, funcType := range m.typeSection.entries {
-		if i > 0 {
-			out.WriteString("\n")
-		}
-		out.WriteString(funcType.String())
-		out.WriteString(printFunctionCode(m.codeSection, funcType.functionIndex))
+	if m.typeSection != nil {
+		out.WriteString(m.typeSection.String())
 	}
-	out.WriteString(m.exportSection.String())
+	if m.importSection != nil {
+		out.WriteString(m.importSection.String())
+	}
+
+	for _, typeEntry := range m.functionSection.entries {
+		out.WriteString("\n	")
+		switch node := typeEntry.(type) {
+		case *FuncType:
+			out.WriteString(printFunctionSignature(node))
+			out.WriteString(printFunctionCode(m.codeSection, node.name))
+		}
+	}
 
 	out.WriteString("\n)")
 	return out.String()
@@ -89,33 +104,59 @@ func (m *Module) String() string {
 
 type TypeSection struct {
 	count uint32
-	entries []*FuncType
+	entries []Type
 }
 func (t *TypeSection) sectionNode() {}
-func (t *TypeSection) String() string { return ""}
+func (t *TypeSection) String() string {
+	var out bytes.Buffer
+	for i, typeEntry := range t.entries {
+		out.WriteString("\n")
+		out.WriteString("	(type $t")
+		out.WriteString(strconv.Itoa(i))
+		out.WriteString(" ")
+		out.WriteString(typeEntry.String())
+		out.WriteString(")")
+	}
+	return out.String()
+}
+func (t *TypeSection) findByIdx(typeIdx uint32) (typeEntry Type, found bool) {
+	for _, typeEntry := range t.entries {
+		if typeEntry.TypeIndex() == typeIdx {
+			return typeEntry, true
+		}
+	}
+	return nil, false
+}
 
 type FuncType struct {
 	functionIndex uint32
+	typeIndex uint32
 	name string
+	exported bool
 	paramCount uint32
 	paramTypes []*ValueType
 	resultCount uint32
 	resultType *ResultType
 }
+func (f *FuncType) typeNode() {}
 func (f *FuncType) String() string {
 	var out bytes.Buffer
-	out.WriteString("	(func $")
-	out.WriteString(f.name)
-	out.WriteString(" ")
+	out.WriteString("(func")
 
 	for _, paramType := range f.paramTypes {
+		out.WriteString(" ")
 		out.WriteString(paramType.String())
 	}
 
 	if f.resultCount > 0 {
+		out.WriteString(" ")
 		out.WriteString(f.resultType.String())
 	}
+	out.WriteString(")")
 	return out.String()
+}
+func (f *FuncType) TypeIndex() uint32 {
+	return f.typeIndex
 }
 
 type ValueType struct {
@@ -124,11 +165,9 @@ type ValueType struct {
 }
 func (v *ValueType) String() string {
 	var out bytes.Buffer
-	out.WriteString("(param $")
-	out.WriteString(v.name)
-	out.WriteString(" ")
+	out.WriteString("(param ")
 	out.WriteString(v.typeName)
-	out.WriteString(") ")
+	out.WriteString(")")
 	return out.String()
 }
 
@@ -139,13 +178,44 @@ func (r *ResultType) String() string {
 	var out bytes.Buffer
 	out.WriteString("(result ")
 	out.WriteString(r.typeName)
-	out.WriteString(") ")
+	out.WriteString(")")
+	return out.String()
+}
+
+type ImportSection struct {
+	count uint
+	entries []*ImportEntry
+}
+func (is *ImportSection) String() string {
+	var out bytes.Buffer
+	for _, entry := range is.entries {
+		out.WriteString("\n	")
+		out.WriteString(entry.String())
+	}
+	return out.String()
+}
+
+type ImportEntry struct {
+	moduleName string
+	fieldName string
+	kind Type
+}
+func (ie *ImportEntry) String() string {
+	var out bytes.Buffer
+	out.WriteString("(import ")
+	out.WriteString(`"`)
+	out.WriteString(ie.moduleName)
+	out.WriteString(`" "`)
+	out.WriteString(ie.fieldName)
+	out.WriteString(`" `)
+	out.WriteString(printImportKind(ie.fieldName, ie.kind))
+	out.WriteString(")")
 	return out.String()
 }
 
 type FunctionSection struct {
 	count uint
-	typesIdx []uint32
+	entries []Type
 }
 func (f *FunctionSection) sectionNode() {}
 func (f *FunctionSection) String() string { return "" }
@@ -158,7 +228,7 @@ func (c *CodeSection) sectionNode() {}
 func (c *CodeSection) String() string { return ""}
 
 type FunctionBody struct {
-	functionIndex uint32
+	funcName string
 	bodySize uint32
 	localCount uint32
 	locals []*LocalEntry
@@ -167,6 +237,7 @@ type FunctionBody struct {
 func (f *FunctionBody) String() string {
 	var out bytes.Buffer
 	for _, local := range f.locals {
+		out.WriteString(" ")
 		out.WriteString(local.String())
 	}
 
@@ -275,6 +346,7 @@ func (e *ExportSection) sectionNode() {}
 func (e *ExportSection) String() string {
 	var out bytes.Buffer
 	for _, exportEntry := range e.entries {
+		out.WriteString("\n	")
 		out.WriteString(exportEntry.String())
 	}
 	return out.String()
@@ -286,7 +358,7 @@ type ExportEntry struct {
 }
 func (e *ExportEntry) String() string {
 	var out bytes.Buffer
-	out.WriteString("\n	(export \"")
+	out.WriteString("(export \"")
 	out.WriteString(e.field)
 	out.WriteString(`" (func $`)
 	out.WriteString(e.field)
@@ -306,13 +378,61 @@ func (c *ConstInt) String() string {
 	return out.String()
 }
 
-func printFunctionCode(codeSection *CodeSection, functionIndex uint32) string {
+func printFunctionSignature(typeKind Type) string {
+	var out bytes.Buffer
+
+	switch node := typeKind.(type) {
+	case *FuncType:
+		out.WriteString("(func $")
+		out.WriteString(node.name)
+		if node.exported {
+			out.WriteString(` (export "`)
+			out.WriteString(node.name)
+			out.WriteString(`")`)
+		}
+		out.WriteString(" (type $t")
+		out.WriteString(strconv.Itoa(int(node.typeIndex)))
+		out.WriteString(")")
+
+		for _, paramType := range node.paramTypes {
+			out.WriteString(" (param $")
+			out.WriteString(paramType.name)
+			out.WriteString(" ")
+			out.WriteString(paramType.typeName)
+			out.WriteString(")")
+		}
+
+		if node.resultCount > 0 {
+			out.WriteString(" ")
+			out.WriteString(node.resultType.String())
+		}
+		return out.String()
+	}
+	return out.String()
+}
+
+func printFunctionCode(codeSection *CodeSection, funcName string) string {
 	for _, body := range codeSection.bodies {
-		if body.functionIndex == functionIndex {
+		if body.funcName == funcName {
 			return body.String()
 		}
 	}
 	return ""
+}
+
+func printImportKind(fieldName string, typeKind Type) string {
+	var out bytes.Buffer
+
+	switch node := typeKind.(type) {
+	case *FuncType:
+		out.WriteString("(func $")
+		out.WriteString(fieldName)
+		out.WriteString(" (type $t")
+		out.WriteString(strconv.Itoa(int(node.functionIndex)))
+		out.WriteString("))")
+		return out.String()
+	}
+	return out.String()
 }
 
 type NoOp struct {

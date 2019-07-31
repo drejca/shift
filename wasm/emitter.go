@@ -25,12 +25,21 @@ func (e *Emmiter) Emit(node Node) error {
 		e.emit(WASM_MAGIC_NUM...)
 		e.emit(WASM_VERSION_1...)
 
-		e.Emit(node.typeSection)
-		e.Emit(node.functionSection)
-		if node.exportSection != nil && node.exportSection.count > 0 {
+		if node.typeSection.count > 0 {
+			e.Emit(node.typeSection)
+		}
+		if node.importSection.count > 0 {
+			e.Emit(node.importSection)
+		}
+		if node.functionSection.count > 0 {
+			e.Emit(node.functionSection)
+		}
+		if node.exportSection.count > 0 {
 			e.Emit(node.exportSection)
 		}
-		e.Emit(node.codeSection)
+		if node.codeSection.count > 0 {
+			e.Emit(node.codeSection)
+		}
 	case *TypeSection:
 		e.emit(SECTION_TYPE)
 		sectionId := e.startSection()
@@ -38,6 +47,15 @@ func (e *Emmiter) Emit(node Node) error {
 		e.emit(byte(node.count))
 		for _, funcType := range node.entries {
 			e.Emit(funcType)
+		}
+		e.endSection(sectionId)
+	case *ImportSection:
+		e.emit(SECTION_IMPORT)
+		sectionId := e.startSection()
+
+		e.emit(byte(node.count))
+		for _, importEntry := range node.entries {
+			e.Emit(importEntry)
 		}
 		e.endSection(sectionId)
 	case *ExportSection:
@@ -54,8 +72,8 @@ func (e *Emmiter) Emit(node Node) error {
 		sectionId := e.startSection()
 
 		e.emit(byte(node.count))
-		for _, typeIdx := range node.typesIdx {
-			e.emit(byte(typeIdx))
+		for _, typeEntry := range node.entries {
+			e.emit(byte(typeEntry.TypeIndex()))
 		}
 		e.endSection(sectionId)
 	case *CodeSection:
@@ -77,6 +95,16 @@ func (e *Emmiter) Emit(node Node) error {
 		if node.resultType != nil {
 			e.Emit(node.resultType)
 		}
+	case *ImportEntry:
+		moduleNameLen := uint32(len(node.moduleName))
+		e.emit(byte(moduleNameLen))
+		e.emit([]byte(node.moduleName)...)
+
+		fieldNameLen := uint32(len(node.fieldName))
+		e.emit(byte(fieldNameLen))
+		e.emit([]byte(node.fieldName)...)
+
+		e.externalKind(node.kind)
 	case *ConstInt:
 		e.emit(CONST_I32)
 		e.emit(byte(node.value))
@@ -106,6 +134,7 @@ func (e *Emmiter) Emit(node Node) error {
 		for _, op := range node.arguments {
 			e.Emit(op)
 		}
+
 		e.emit(CALL)
 		e.emit(byte(node.functionIndex))
 	case *LocalEntry:
@@ -172,6 +201,14 @@ func (e *Emmiter) removeSection(sectionId int) {
 			e.sections = append(e.sections[:i], e.sections[i+1:]...)
 			return
 		}
+	}
+}
+
+func (e *Emmiter) externalKind(node Node) {
+	switch node := node.(type) {
+	case *FuncType:
+		e.emit(byte(EXT_KIND_FUNC))
+		e.emit(byte(node.functionIndex))
 	}
 }
 

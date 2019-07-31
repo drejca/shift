@@ -27,8 +27,8 @@ fn main() {
 
 	expected := `
 (module 
-	(func $main )
-	(export "main" (func $main))
+	(type $t0 (func))
+	(func $main (export "main") (type $t0))
 )`
 
 	err := assert.EqualString(expected, "\n"+wasmModule.String())
@@ -39,6 +39,13 @@ fn main() {
 
 func TestCompileToString(t *testing.T) {
 	input := `
+import fn assert(expected i32, actual i32)
+
+fn main() {
+	let res = Calc(6, 7)
+	assert(21, res)
+}
+
 fn Calc(a i32, b i32) : i32 {
 	let c = 2
 	c = c + a
@@ -64,7 +71,15 @@ fn add(a i32, b i32) : i32 {
 
 	expected := `
 (module 
-	(func $Calc (param $a i32) (param $b i32) (result i32) (local $c i32)
+	(type $t0 (func (param i32) (param i32)))
+	(type $t1 (func))
+	(type $t2 (func (param i32) (param i32) (result i32)))
+	(import "env" "assert" (func $assert (type $t0)))
+	(func $main (export "main") (type $t1) (local $res i32)
+		(call $Calc (i32.const 6) (i32.const 7))
+		set_local $res
+		(call $assert (i32.const 21) (get_local $res)))
+	(func $Calc (export "Calc") (type $t2) (param $a i32) (param $b i32) (result i32) (local $c i32)
 		i32.const 2
 		set_local $c
 		get_local $c
@@ -74,11 +89,10 @@ fn add(a i32, b i32) : i32 {
 		(call $add (get_local $a) (get_local $b))
 		get_local $c
 		i32.add)
-	(func $add (param $a i32) (param $b i32) (result i32) 
+	(func $add (type $t2) (param $a i32) (param $b i32) (result i32)
 		get_local $a
 		get_local $b
 		i32.add)
-	(export "Calc" (func $Calc))
 )`
 
 	err := assert.EqualString(expected, "\n"+wasmModule.String())

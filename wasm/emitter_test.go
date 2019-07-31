@@ -1,6 +1,7 @@
 package wasm
 
 import (
+	"fmt"
 	"github.com/drejca/shift/parser"
 	"github.com/drejca/shift/print"
 	"github.com/perlin-network/life/exec"
@@ -50,8 +51,44 @@ fn main() {
 	}
 }
 
+type Resolver struct{
+	t *testing.T
+}
+
+func (r *Resolver) ResolveFunc(module string, field string) exec.FunctionImport {
+	switch module {
+	case "env":
+		switch field {
+		case "assert":
+			return func(vm *exec.VirtualMachine) int64 {
+				expected := uint32(vm.GetCurrentFrame().Locals[0])
+				actual := uint32(vm.GetCurrentFrame().Locals[1])
+				if expected != actual {
+					r.t.Errorf("expected %d got %d", expected, actual)
+				}
+				return 0
+			}
+		default:
+			panic(fmt.Errorf("unknown import resolved: %s", field))
+		}
+	default:
+		panic(fmt.Errorf("unknown module: %s", module))
+	}
+}
+
+func (r *Resolver) ResolveGlobal(module, field string) int64 {
+	panic("we're not resolving global variables for now")
+}
+
 func TestEmitter(t *testing.T) {
 	input := `
+import fn assert(expected i32, actual i32)
+
+fn main() {
+	let res = Calc(6, 7)
+	assert(21, res)
+}
+
 fn Calc(a i32, b i32) : i32 {
 	let c = 2
 	c = c + a
@@ -81,25 +118,22 @@ fn add(a i32, b i32) : i32 {
 		t.Error(err)
 	}
 
-	vm, err := exec.NewVirtualMachine(emitter.Bytes(), exec.VMConfig{}, &exec.NopResolver{}, nil)
+	resolver := &Resolver{t: t}
+
+	vm, err := exec.NewVirtualMachine(emitter.Bytes(), exec.VMConfig{}, resolver, nil)
 	if err != nil {
 		panic(err)
 	}
 
-	entryID, ok := vm.GetFunctionExport("Calc")
+	entryID, ok := vm.GetFunctionExport("main")
 	if !ok {
 		panic("entry function not found")
 	}
 
-	ret, err := vm.Run(entryID, int64(5), int64(7))
+	_, err = vm.Run(entryID)
 	if err != nil {
 		vm.PrintStackTrace()
 		panic(err)
-	}
-
-	expect := int64(19)
-	if ret != expect {
-		t.Errorf("expected %d but got %d", expect, ret)
 	}
 }
 

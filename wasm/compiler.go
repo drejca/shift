@@ -7,9 +7,11 @@ import (
 )
 
 type Compiler struct {
+	module *Module
 	symbolTable *SymbolTable
-	typeSection *TypeSection
 	functionBody *FunctionBody
+	typeIndex uint32
+	functionIndex uint32
 
 	errors []error
 }
@@ -21,77 +23,128 @@ func NewCompiler() *Compiler {
 }
 
 func (c *Compiler) CompileProgram(program *ast.Program) *Module {
-	module := &Module{
+	c.module = &Module{
+		typeSection: &TypeSection{},
+		importSection: &ImportSection{},
 		functionSection: &FunctionSection{},
+		exportSection: &ExportSection{},
+		codeSection: &CodeSection{},
 	}
-	var functionIndex uint32 = 0
 
 	for _, stmt := range program.Statements {
-		function, ok := stmt.(*ast.Function)
-		if ok {
-			module.functionSection.count++
-			module.functionSection.typesIdx = append(module.functionSection.typesIdx, functionIndex)
+		switch stmt := stmt.(type) {
+		case *ast.Function:
+			funcType := c.compileFunctionSignature(stmt.Signature)
 
-			funcType := c.compileFunctionSignature(function, functionIndex)
+			c.appendFunction(funcType)
 
 			if (funcType.name[0] >= 'A' && funcType.name[0] <= 'Z') || funcType.name == "main"  {
-				appendExportEntry(module, funcType)
+				funcType.exported = true
+				c.appendExportEntry(funcType)
 			}
-			c.appendFunctionType(module, funcType)
+		case *ast.ImportStatement:
+			funcType := c.compileFunctionSignature(stmt.FuncSignature)
 
-			functionIndex++
+			c.appendImport(funcType)
 		}
 	}
 
 	for _, stmt := range program.Statements {
 		function, ok := stmt.(*ast.Function)
 		if ok {
-			funcBody := c.compileFunctionBody(function, module.typeSection)
-			appendCodeSection(module, funcBody)
+			funcBody := c.compileFunctionBody(function)
+			c.appendCodeSection(funcBody)
 		}
 	}
 
-	return module
+	return c.module
 }
 
-func (c *Compiler) compileFunctionSignature(function *ast.Function, functionIndex uint32) *FuncType {
+func (c *Compiler) compileFunctionSignature(functionSignature *ast.FunctionSignature) *FuncType {
 	funcType := &FuncType{
-		functionIndex: functionIndex,
-		name: function.Name,
+		name: functionSignature.Name,
 	}
 
-	for _, param := range function.InputParams {
+	for _, param := range functionSignature.InputParams {
 		valueType := &ValueType{name: param.Ident.Value, typeName: param.Type}
 		funcType.paramTypes = append(funcType.paramTypes, valueType)
 		funcType.paramCount++
 	}
 
-	if len(function.ReturnParams) > 1 {
-		c.errors = append(c.errors, fmt.Errorf("fn %s(...) : (...) multiple return types is not implemented", function.Name))
+	if len(functionSignature.ReturnParams) > 1 {
+		c.errors = append(c.errors, fmt.Errorf("fn %s(...) : (...) multiple return types is not implemented", functionSignature.Name))
 	}
 
-	for _, param := range function.ReturnParams {
+	for _, param := range functionSignature.ReturnParams {
 		resultType := &ResultType{typeName: param.Type}
 		funcType.resultType = resultType
 		funcType.resultCount = 1
 	}
 
+	if foundFuncType, found := c.findFunctionType(funcType.paramTypes, funcType.resultType); found {
+		funcType.typeIndex = foundFuncType.typeIndex
+		funcType.functionIndex = c.functionIndex
+	} else {
+		funcType.typeIndex = c.typeIndex
+		funcType.functionIndex = c.functionIndex
+		c.appendType(funcType)
+	}
+
 	return funcType
 }
 
-func (c *Compiler) compileFunctionBody(function *ast.Function, typeSection *TypeSection) *FunctionBody {
+func (c *Compiler) findFunctionType(paramTypes []*ValueType, resultType *ResultType) (funcType *FuncType, found bool){
+	for _, typeEntry := range c.module.typeSection.entries {
+		switch node := typeEntry.(type) {
+		case *FuncType:
+			if c.matchParams(node.paramTypes, paramTypes) && c.matchResult(node.resultType, resultType) {
+				return node, true
+			}
+		}
+	}
+	return nil, false
+}
+
+func (c *Compiler) matchParams(paramTypesA []*ValueType, paramTypesB []*ValueType) (isMatch bool) {
+	if len(paramTypesA) != len(paramTypesB) {
+		return false
+	}
+
+	for i, paramType := range paramTypesA {
+		if paramType.typeName != paramTypesB[i].typeName {
+			return false
+		}
+	}
+	return true
+}
+
+func (c *Compiler) matchResult(resultTypeA *ResultType, resultTypeB *ResultType) (isMatch bool) {
+	if resultTypeA == nil && resultTypeB == nil {
+		return true
+	}
+	if resultTypeA == nil || resultTypeB == nil {
+		return false
+	}
+	if resultTypeA.typeName == resultTypeB.typeName {
+		return true
+	}
+	return false
+}
+
+func (c *Compiler) compileFunctionBody(function *ast.Function) *FunctionBody {
 	c.functionBody = &FunctionBody{}
 
-	funcType, found := getFunctionType(typeSection, function.Name)
+	funcType, found := c.getFunctionType(function.Signature.Name)
 	if !found {
-		c.errors = append(c.errors, fmt.Errorf("function type for %s not found", function.Name))
+		c.errors = append(c.errors, fmt.Errorf("function type for %s not found", function.Signature.Name))
 		return nil
 	}
-	c.functionBody.functionIndex = funcType.functionIndex
+
+	c.functionBody.funcName = funcType.name
 
 	c.enterScope()
 
-	for _, param := range function.InputParams {
+	for _, param := range function.Signature.InputParams {
 		c.symbolTable.Define(param.Ident.Value, param.Type)
 	}
 
@@ -111,11 +164,11 @@ func (c *Compiler) compileExpression(node ast.Node) []Operation {
 	case *ast.ReturnStatement:
 		return c.compileExpression(node.ReturnValue)
 	case *ast.LetStatement:
-		return c.compileLetStatement(node, c.functionBody)
+		return c.compileLetStatement(node)
 	case *ast.ExpressionStatement:
 		return c.compileExpression(node.Expression)
 	case *ast.CallExpression:
-		return c.compileCallExpression(node, c.typeSection)
+		return c.compileCallExpression(node)
 	case *ast.AssignmentExpression:
 		return c.compileAssignmentExpression(node)
 	case *ast.Identifier:
@@ -128,7 +181,7 @@ func (c *Compiler) compileExpression(node ast.Node) []Operation {
 	return []Operation{}
 }
 
-func (c *Compiler) compileLetStatement(letStatement *ast.LetStatement, functionBody *FunctionBody) []Operation {
+func (c *Compiler) compileLetStatement(letStatement *ast.LetStatement) []Operation {
 	var operations []Operation
 
 	symbol := c.symbolTable.Define(letStatement.Name.Value, c.inferType(letStatement.Value))
@@ -140,9 +193,9 @@ func (c *Compiler) compileLetStatement(letStatement *ast.LetStatement, functionB
 		setGlobal  := &SetGlobal{name: symbol.Name, globalIndex: symbol.Index}
 		operations = append(operations, setGlobal)
 	} else {
-		functionBody.localCount++
+		c.functionBody.localCount++
 		localEntry := &LocalEntry{count: 1, valueType: &ValueType{name: symbol.Name, typeName: symbol.Type}}
-		functionBody.locals = append(functionBody.locals, localEntry)
+		c.functionBody.locals = append(c.functionBody.locals, localEntry)
 
 		setLocal := &SetLocal{name: symbol.Name, localIndex: symbol.Index}
 		operations = append(operations, setLocal)
@@ -150,12 +203,12 @@ func (c *Compiler) compileLetStatement(letStatement *ast.LetStatement, functionB
 	return operations
 }
 
-func (c *Compiler) compileCallExpression(callExpression *ast.CallExpression, typeSection *TypeSection) []Operation {
+func (c *Compiler) compileCallExpression(callExpression *ast.CallExpression) []Operation {
 	var operations []Operation
 
 	funcName := callExpression.Function.String()
 
-	funcType, found := getFunctionType(typeSection, funcName)
+	funcType, found := c.getFunctionType(funcName)
 	if !found {
 		c.errors = append(c.errors, fmt.Errorf("function type for %s not found", funcName))
 		return nil
@@ -223,40 +276,61 @@ func (c *Compiler) compileIdentifier(identifier *ast.Identifier) []Operation {
 	return []Operation{operation}
 }
 
-func getFunctionType(typeSection *TypeSection, funcName string) (funcType *FuncType, found bool) {
-	for _, entry := range typeSection.entries {
-		if entry.name == funcName {
-			return entry, true
+func (c *Compiler) getFunctionType(funcName string) (funcType *FuncType, found bool) {
+	for _, typeEntry := range c.module.functionSection.entries {
+		switch node := typeEntry.(type) {
+		case *FuncType:
+			if node.name == funcName {
+				return node, true
+			}
+		}
+	}
+	for _, importEntry := range c.module.importSection.entries {
+		switch node := importEntry.kind.(type) {
+		case *FuncType:
+			if node.name == funcName {
+				return node, true
+			}
 		}
 	}
 	return nil, false
 }
 
-func appendExportEntry(module *Module, funcType *FuncType) {
-	if module.exportSection == nil {
-		module.exportSection = &ExportSection{}
-	}
-	exportEntry := &ExportEntry{index: funcType.functionIndex, field: funcType.name}
+func (c *Compiler) appendExportEntry(funcType *FuncType) {
+	exportEntry := &ExportEntry{index: funcType.typeIndex, field: funcType.name}
 
-	module.exportSection.entries = append(module.exportSection.entries, exportEntry)
-	module.exportSection.count++
+	c.module.exportSection.entries = append(c.module.exportSection.entries, exportEntry)
+	c.module.exportSection.count++
 }
 
-func (c *Compiler) appendFunctionType(module *Module, funcType *FuncType) {
-	if module.typeSection == nil {
-		module.typeSection = &TypeSection{}
-		c.typeSection = module.typeSection
+func (c *Compiler) appendImport(externalKind Type) {
+	importEntry := &ImportEntry{moduleName: "env", kind: externalKind}
+
+	switch node := externalKind.(type) {
+	case *FuncType:
+		importEntry.fieldName = node.name
 	}
-	module.typeSection.entries = append(module.typeSection.entries, funcType)
-	module.typeSection.count++
+
+	c.module.importSection.entries = append(c.module.importSection.entries, importEntry)
+	c.module.importSection.count++
+	c.functionIndex++
 }
 
-func appendCodeSection(module *Module, funcBody *FunctionBody) {
-	if module.codeSection == nil {
-		module.codeSection = &CodeSection{}
-	}
-	module.codeSection.bodies = append(module.codeSection.bodies, funcBody)
-	module.codeSection.count++
+func (c *Compiler) appendType(funcType *FuncType) {
+	c.module.typeSection.entries = append(c.module.typeSection.entries, funcType)
+	c.module.typeSection.count++
+	c.typeIndex++
+}
+
+func (c *Compiler) appendFunction(funcType *FuncType) {
+	c.module.functionSection.count++
+	c.module.functionSection.entries = append(c.module.functionSection.entries, funcType)
+	c.functionIndex++
+}
+
+func (c *Compiler) appendCodeSection(funcBody *FunctionBody) {
+	c.module.codeSection.bodies = append(c.module.codeSection.bodies, funcBody)
+	c.module.codeSection.count++
 }
 
 func (c *Compiler) handleError(err error) {
@@ -278,7 +352,7 @@ func (c *Compiler) functionSymbol(callExpression ast.Node) (symbol Symbol, found
 func (c *Compiler) inferType(expression ast.Expression) string {
 	switch node := expression.(type) {
 	case *ast.CallExpression:
-		funcType, found := getFunctionType(c.typeSection, node.Token.Lit)
+		funcType, found := c.getFunctionType(node.Function.String())
 		if !found {
 			c.errors = append(c.errors, fmt.Errorf("function type for %s not found", node.Token.Lit))
 			return "unknown"

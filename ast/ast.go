@@ -39,9 +39,7 @@ func (p *Program) String() string {
 }
 
 type Function struct {
-	Name         string
-	InputParams  []*Parameter
-	ReturnParams []*Parameter
+	Signature 	*FunctionSignature
 	Body         *BlockStatement
 }
 
@@ -51,6 +49,28 @@ func (f *Function) String() string {
 
 	out.WriteString("\n")
 	out.WriteString("fn ")
+
+	out.WriteString(f.Signature.String())
+
+	out.WriteString(" {")
+	if f.Body != nil {
+		out.WriteString(f.Body.String())
+	}
+	out.WriteString("\n}\n")
+
+	return out.String()
+}
+
+type FunctionSignature struct {
+	Name         string
+	InputParams  []*Parameter
+	ReturnParams []*Parameter
+}
+
+func (f *FunctionSignature) statementNode() {}
+func (f *FunctionSignature) String() string {
+	var out bytes.Buffer
+
 	out.WriteString(f.Name)
 	out.WriteString("(")
 	for i, param := range f.InputParams {
@@ -70,13 +90,6 @@ func (f *Function) String() string {
 		out.WriteString(" ")
 		out.WriteString(param.String())
 	}
-
-	out.WriteString(" {")
-	if f.Body != nil {
-		out.WriteString(f.Body.String())
-	}
-	out.WriteString("\n}\n")
-
 	return out.String()
 }
 
@@ -152,6 +165,22 @@ func (ls *LetStatement) String() string {
 	if ls.Value != nil {
 		out.WriteString(ls.Value.String())
 	}
+
+	return out.String()
+}
+
+type ImportStatement struct {
+	FuncSignature *FunctionSignature
+}
+
+func (is *ImportStatement) statementNode() {}
+func (is *ImportStatement) String() string {
+	var out bytes.Buffer
+
+	out.WriteString("\n")
+	out.WriteString("import fn ")
+	out.WriteString(is.FuncSignature.String())
+	out.WriteString("\n")
 
 	return out.String()
 }

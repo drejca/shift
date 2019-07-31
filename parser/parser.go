@@ -91,6 +91,8 @@ func (p *Parser) parseGlobalStatement() (ast.Statement, token.CompileError) {
 		return p.parseFunc()
 	case token.LET:
 		return p.parseLetStatement()
+	case token.IMPORT:
+		return p.parseImportStatement()
 	}
 	return nil, p.parseError(fmt.Errorf("non-declaration statement outside function body"), p.curToken, p.curToken.Pos.Column - 1)
 }
@@ -106,11 +108,34 @@ func (p *Parser) parseLocalStatement() (ast.Statement, token.CompileError) {
 }
 
 func (p *Parser) parseFunc() (*ast.Function, token.CompileError) {
+	fnSignature, err := p.parseFunctionSignature()
+	if err != nil {
+		return nil, err
+	}
+
+	if !p.expectPeek(token.LCURLY) {
+		return nil, p.peekError(token.LCURLY)
+	}
+
+	stmt, err := p.parseBlockStatement()
+	if err != nil {
+		return nil, err
+	}
+
+	fn := &ast.Function{
+		Signature: fnSignature,
+		Body: stmt,
+	}
+
+	return fn, nil
+}
+
+func (p *Parser) parseFunctionSignature() (*ast.FunctionSignature, token.CompileError) {
 	if !p.expectPeek(token.IDENT) {
 		return nil, p.parseError(fmt.Errorf("missing function name"), p.curToken, p.curToken.Pos.Column + 2)
 	}
 
-	fn := &ast.Function{
+	fnSignature := &ast.FunctionSignature{
 		Name: p.curToken.Lit,
 	}
 
@@ -123,7 +148,7 @@ func (p *Parser) parseFunc() (*ast.Function, token.CompileError) {
 		if err != nil {
 			return nil, err
 		}
-		fn.InputParams = inputParams
+		fnSignature.InputParams = inputParams
 	}
 
 	if !p.expectPeek(token.RPAREN) {
@@ -137,20 +162,9 @@ func (p *Parser) parseFunc() (*ast.Function, token.CompileError) {
 		if err != nil {
 			return nil, err
 		}
-		fn.ReturnParams = returnParams
+		fnSignature.ReturnParams = returnParams
 	}
-
-	if !p.expectPeek(token.LCURLY) {
-		return nil, p.peekError(token.LCURLY)
-	}
-
-	stmt, err := p.parseBlockStatement()
-	if err != nil {
-		return nil, err
-	}
-	fn.Body = stmt
-
-	return fn, nil
+	return fnSignature, nil
 }
 
 func (p *Parser) parseInputParameters() ([]*ast.Parameter, token.CompileError) {
@@ -282,7 +296,19 @@ func (p *Parser) parseLetStatement() (*ast.LetStatement, token.CompileError) {
 	return stmt, nil
 }
 
-func (p* Parser) parseType() string {
+func (p *Parser) parseImportStatement() (*ast.ImportStatement, token.CompileError) {
+	if !p.expectPeek(token.FUNC) {
+		return nil, p.parseError(fmt.Errorf("expected import function signature"), p.curToken, p.curToken.Pos.Column + 2)
+	}
+
+	fnSignature, err := p.parseFunctionSignature()
+	if err != nil {
+		return nil, err
+	}
+	return &ast.ImportStatement{FuncSignature: fnSignature}, nil
+}
+
+func (p *Parser) parseType() string {
 	if p.peekTokenIs(token.IDENT) {
 		p.nextToken()
 		return p.curToken.Lit
@@ -293,6 +319,16 @@ func (p* Parser) parseType() string {
 func (p *Parser) parseExpressionStatement() (*ast.ExpressionStatement, token.CompileError) {
 	stmt := &ast.ExpressionStatement{Token: p.curToken}
 
+	// function call
+	if p.curTokenIs(token.IDENT) && p.peekTokenIs(token.LPAREN) {
+		expression, err := p.parseExpression(LOWEST)
+		if err != nil {
+			return nil, err
+		}
+		stmt.Expression = expression
+	}
+
+	// assigment
 	if p.curTokenIs(token.IDENT) && p.peekTokenIs(token.ASSIGN) {
 		expression, err :=  p.parseAssignmentExpression()
 		if err != nil {
