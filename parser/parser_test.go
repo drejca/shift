@@ -16,8 +16,10 @@ func TestParseFunc(t *testing.T) {
 import fn assert(expected i32, actual i32)
 
 fn main() {
-	let res = Calc(7, 5)
-	assert(res)
+	let res = Calc(6, 7)
+	if (21 != res) {
+		assert(21, res)
+	}
 }
 
 fn Calc(a i32, b i32) : i32 {

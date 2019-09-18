@@ -12,14 +12,16 @@ import (
 const (
 	_ int = iota
 	LOWEST
-	SUM   // +
-	MINUS // -
+	EQUALS // =, ==, !=
+	SUM   // +, -
 	CALL
 )
 
 var precedences = map[token.Type]int{
+	token.ASSIGN: EQUALS,
+	token.NOT_EQ:   EQUALS,
 	token.PLUS:  SUM,
-	token.MINUS: MINUS,
+	token.MINUS: SUM,
 	token.RPAREN: LOWEST,
 	token.LPAREN:   CALL,
 }
@@ -32,6 +34,8 @@ type Parser struct {
 
 	prefixParseFns map[token.Type]prefixParseFn
 	infixParseFns  map[token.Type]infixParseFn
+
+	blockDepth int
 }
 
 type ParseError struct {
@@ -58,10 +62,14 @@ func New(input io.Reader) *Parser {
 	p.registerPrefix(token.INT, p.parseIntegerLiteral)
 	p.registerPrefix(token.FLOAT, p.parseFloatLiteral)
 	p.registerPrefix(token.LPAREN, p.parseGroupedExpression)
+	p.registerPrefix(token.IF, p.parseIfExpression)
 
 	p.infixParseFns = make(map[token.Type]infixParseFn)
 	p.registerInfix(token.PLUS, p.parseInfixExpression)
 	p.registerInfix(token.MINUS, p.parseInfixExpression)
+	p.registerInfix(token.ASSIGN, p.parseAssignmentExpression)
+	p.registerInfix(token.NOT_EQ, p.parseInfixExpression)
+
 	p.registerInfix(token.LPAREN, p.parseCallExpression)
 
 	p.nextToken()
@@ -230,7 +238,10 @@ func (p *Parser) parseReturnParameters() ([]*ast.Parameter, token.CompileError) 
 }
 
 func (p *Parser) parseBlockStatement() (*ast.BlockStatement, token.CompileError) {
-	block := &ast.BlockStatement{FirstToken: p.curToken}
+	p.enterBlock()
+	defer p.returnFromBlock()
+
+	block := &ast.BlockStatement{FirstToken: p.curToken, Depth: p.blockDepth}
 	block.Statements = []ast.Statement{}
 
 	p.nextToken()
@@ -248,7 +259,16 @@ func (p *Parser) parseBlockStatement() (*ast.BlockStatement, token.CompileError)
 	if p.curTokenIs(token.EOF) {
 		return nil, p.peekError(token.RCURLY)
 	}
+
 	return block, nil
+}
+
+func (p *Parser) enterBlock() {
+	p.blockDepth++
+}
+
+func (p *Parser) returnFromBlock() {
+	p.blockDepth--
 }
 
 func (p *Parser) parseReturn() (*ast.ReturnStatement, token.CompileError) {
@@ -296,6 +316,26 @@ func (p *Parser) parseLetStatement() (*ast.LetStatement, token.CompileError) {
 	return stmt, nil
 }
 
+func (p *Parser) parseIfExpression() (ast.Expression, token.CompileError) {
+	p.nextToken()
+
+	expression, err := p.parseExpression(LOWEST)
+	if err != nil {
+		return nil, err
+	}
+
+	if !p.expectPeek(token.LCURLY) {
+		return nil, p.parseError(fmt.Errorf("missing { at beginning of if block"), p.curToken, p.curToken.Pos.Column + 2)
+	}
+
+	stmt, err := p.parseBlockStatement()
+	if err != nil {
+		return nil, err
+	}
+
+	return &ast.IfExpression{Condition: expression, Body: stmt}, nil
+}
+
 func (p *Parser) parseImportStatement() (*ast.ImportStatement, token.CompileError) {
 	if !p.expectPeek(token.FUNC) {
 		return nil, p.parseError(fmt.Errorf("expected import function signature"), p.curToken, p.curToken.Pos.Column + 2)
@@ -319,23 +359,11 @@ func (p *Parser) parseType() string {
 func (p *Parser) parseExpressionStatement() (*ast.ExpressionStatement, token.CompileError) {
 	stmt := &ast.ExpressionStatement{Token: p.curToken}
 
-	// function call
-	if p.curTokenIs(token.IDENT) && p.peekTokenIs(token.LPAREN) {
-		expression, err := p.parseExpression(LOWEST)
-		if err != nil {
-			return nil, err
-		}
-		stmt.Expression = expression
+	expression, err := p.parseExpression(LOWEST)
+	if err != nil {
+		return nil, err
 	}
-
-	// assigment
-	if p.curTokenIs(token.IDENT) && p.peekTokenIs(token.ASSIGN) {
-		expression, err :=  p.parseAssignmentExpression()
-		if err != nil {
-			return nil, err
-		}
-		stmt.Expression = expression
-	}
+	stmt.Expression = expression
 
 	if p.peekTokenIs(token.SEMICOLON) {
 		p.nextToken()
@@ -343,20 +371,14 @@ func (p *Parser) parseExpressionStatement() (*ast.ExpressionStatement, token.Com
 	return stmt, nil
 }
 
-func (p *Parser) parseAssignmentExpression() (ast.Expression, token.CompileError) {
-	expression, err := p.parseIdentifier()
-	if err != nil {
-		return nil, err
-	}
-
+func (p *Parser) parseAssignmentExpression(expression ast.Expression) (ast.Expression, token.CompileError) {
 	stmt := &ast.AssignmentExpression{
 		Token: p.curToken,
 		Identifier: expression,
 	}
 	p.nextToken()
-	p.nextToken()
 
-	expression, err = p.parseExpression(LOWEST)
+	expression, err := p.parseExpression(LOWEST)
 	if err != nil {
 		return nil, err
 	}

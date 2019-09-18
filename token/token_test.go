@@ -28,6 +28,8 @@ func TestLookupIdent(t *testing.T) {
 		{ident: "return", expectToken: Token{Lit: "return", Type: RETURN}},
 		{ident: "let", expectToken: Token{Lit: "let", Type: LET}},
 		{ident: "name", expectToken: Token{Lit: "name", Type: IDENT}},
+		{ident: "import", expectToken: Token{Lit: "import", Type: IMPORT}},
+		{ident: "if", expectToken: Token{Lit: "if", Type: IF}},
 	}
 
 	for _, test := range tests {

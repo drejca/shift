@@ -52,12 +52,10 @@ func (f *Function) String() string {
 
 	out.WriteString(f.Signature.String())
 
-	out.WriteString(" {")
 	if f.Body != nil {
 		out.WriteString(f.Body.String())
 	}
-	out.WriteString("\n}\n")
-
+	out.WriteString("\n")
 	return out.String()
 }
 
@@ -113,15 +111,29 @@ func (p *Parameter) String() string {
 type BlockStatement struct {
 	FirstToken token.Token
 	Statements []Statement
+	Depth int
 }
 
 func (b *BlockStatement) statementNode() {}
 func (b *BlockStatement) String() string {
 	var out bytes.Buffer
 
+	out.WriteString(" {")
 	for _, stmt := range b.Statements {
-		out.WriteString("\n\t")
+		out.WriteString("\n")
+		out.WriteString(indent(b.Depth))
 		out.WriteString(stmt.String())
+	}
+	out.WriteString("\n")
+	out.WriteString(indent(b.Depth - 1))
+	out.WriteString("}")
+	return out.String()
+}
+
+func indent(depth int) string {
+	var out bytes.Buffer
+	for i := 0; i < depth; i++ {
+		out.WriteString("\t")
 	}
 	return out.String()
 }
@@ -236,6 +248,22 @@ func (as *AssignmentExpression) String() string {
 	if as.Expression != nil {
 		out.WriteString(as.Expression.String())
 	}
+	return out.String()
+}
+
+type IfExpression struct {
+	Condition Expression
+	Body *BlockStatement
+}
+
+func (ie *IfExpression) expressionNode() {}
+func (ie *IfExpression) String() string {
+	var out bytes.Buffer
+
+	out.WriteString("if ")
+	out.WriteString(ie.Condition.String())
+	out.WriteString(ie.Body.String())
+
 	return out.String()
 }
 

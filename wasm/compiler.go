@@ -2,15 +2,16 @@ package wasm
 
 import (
 	"fmt"
-	"github.com/drejca/shift/ast"
 	"reflect"
+
+	"github.com/drejca/shift/ast"
 )
 
 type Compiler struct {
-	module *Module
-	symbolTable *SymbolTable
-	functionBody *FunctionBody
-	typeIndex uint32
+	module        *Module
+	symbolTable   *SymbolTable
+	functionBody  *FunctionBody
+	typeIndex     uint32
 	functionIndex uint32
 
 	errors []error
@@ -24,11 +25,11 @@ func NewCompiler() *Compiler {
 
 func (c *Compiler) CompileProgram(program *ast.Program) *Module {
 	c.module = &Module{
-		typeSection: &TypeSection{},
-		importSection: &ImportSection{},
+		typeSection:     &TypeSection{},
+		importSection:   &ImportSection{},
 		functionSection: &FunctionSection{},
-		exportSection: &ExportSection{},
-		codeSection: &CodeSection{},
+		exportSection:   &ExportSection{},
+		codeSection:     &CodeSection{},
 	}
 
 	for _, stmt := range program.Statements {
@@ -38,7 +39,7 @@ func (c *Compiler) CompileProgram(program *ast.Program) *Module {
 
 			c.appendFunction(funcType)
 
-			if (funcType.name[0] >= 'A' && funcType.name[0] <= 'Z') || funcType.name == "main"  {
+			if (funcType.name[0] >= 'A' && funcType.name[0] <= 'Z') || funcType.name == "main" {
 				funcType.exported = true
 				c.appendExportEntry(funcType)
 			}
@@ -93,7 +94,7 @@ func (c *Compiler) compileFunctionSignature(functionSignature *ast.FunctionSigna
 	return funcType
 }
 
-func (c *Compiler) findFunctionType(paramTypes []*ValueType, resultType *ResultType) (funcType *FuncType, found bool){
+func (c *Compiler) findFunctionType(paramTypes []*ValueType, resultType *ResultType) (funcType *FuncType, found bool) {
 	for _, typeEntry := range c.module.typeSection.entries {
 		switch node := typeEntry.(type) {
 		case *FuncType:
@@ -148,13 +149,21 @@ func (c *Compiler) compileFunctionBody(function *ast.Function) *FunctionBody {
 		c.symbolTable.Define(param.Ident.Value, param.Type)
 	}
 
-	for _, stmt := range function.Body.Statements {
-		operations := c.compileExpression(stmt)
-		c.functionBody.code = append(c.functionBody.code, operations...)
-	}
+	operations := c.compileBody(function.Body)
+	c.functionBody.code = append(c.functionBody.code, operations...)
 
 	c.leaveScope()
 	return c.functionBody
+}
+
+func (c *Compiler) compileBody(body *ast.BlockStatement) []Operation {
+	var operations []Operation
+
+	for _, stmt := range body.Statements {
+		ops := c.compileExpression(stmt)
+		operations = append(operations, ops...)
+	}
+	return operations
 }
 
 func (c *Compiler) compileExpression(node ast.Node) []Operation {
@@ -169,6 +178,8 @@ func (c *Compiler) compileExpression(node ast.Node) []Operation {
 		return c.compileExpression(node.Expression)
 	case *ast.CallExpression:
 		return c.compileCallExpression(node)
+	case *ast.IfExpression:
+		return c.compileIfExpression(node)
 	case *ast.AssignmentExpression:
 		return c.compileAssignmentExpression(node)
 	case *ast.Identifier:
@@ -190,7 +201,7 @@ func (c *Compiler) compileLetStatement(letStatement *ast.LetStatement) []Operati
 	operations = append(operations, expressionOps...)
 
 	if symbol.Scope == GlobalScope {
-		setGlobal  := &SetGlobal{name: symbol.Name, globalIndex: symbol.Index}
+		setGlobal := &SetGlobal{name: symbol.Name, globalIndex: symbol.Index}
 		operations = append(operations, setGlobal)
 	} else {
 		c.functionBody.localCount++
@@ -221,6 +232,18 @@ func (c *Compiler) compileCallExpression(callExpression *ast.CallExpression) []O
 		call.arguments = append(call.arguments, operations...)
 	}
 	operations = append(operations, call)
+	return operations
+}
+
+func (c *Compiler) compileIfExpression(ifExpression *ast.IfExpression) []Operation {
+	var operations []Operation
+
+	ifOp := &If{
+		conditionOps: c.compileExpression(ifExpression.Condition),
+		thenOps:      c.compileBody(ifExpression.Body),
+	}
+
+	operations = append(operations, ifOp)
 	return operations
 }
 
@@ -258,6 +281,10 @@ func (c *Compiler) compileInfixExpression(infixExpression *ast.InfixExpression) 
 		operations = append(operations, operation)
 	case "-":
 		operation, err := subtractTypes(infixExpression.Left, infixExpression.Right)
+		c.handleError(err)
+		operations = append(operations, operation)
+	case "!=":
+		operation, err := notEqual(infixExpression.Left, infixExpression.Right)
 		c.handleError(err)
 		operations = append(operations, operation)
 	default:
@@ -370,6 +397,10 @@ func sumTypes(left ast.Node, right ast.Node) (Operation, error) {
 
 func subtractTypes(left ast.Node, right ast.Node) (Operation, error) {
 	return &Sub{}, nil
+}
+
+func notEqual(left ast.Node, right ast.Node) (Operation, error) {
+	return &NotEqual{}, nil
 }
 
 func (c *Compiler) enterScope() {

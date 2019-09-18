@@ -35,6 +35,7 @@ const(
 	RETURN
 	LET
 	IMPORT
+	IF
 
 	// Delimiters
 	COMMA
@@ -50,6 +51,8 @@ const(
 	PLUS
 	MINUS
 	ASSIGN
+	BANG
+	NOT_EQ
 )
 
 var tokens = map[Type]string {
@@ -68,6 +71,7 @@ var tokens = map[Type]string {
 	RETURN: "RETURN",
 	LET: "LET",
 	IMPORT: "IMPORT",
+	IF: "IF",
 
 	// Delimiters
 	COMMA: ",",
@@ -83,6 +87,9 @@ var tokens = map[Type]string {
 	PLUS: "+",
 	MINUS: "-",
 	ASSIGN: "=",
+	BANG: "!",
+
+	NOT_EQ: "!=",
 }
 
 func Print(tokenType Type) string {
@@ -103,6 +110,8 @@ func LookupIdent(ident string) Token {
 		return Token{Type: LET, Lit: ident}
 	case "import":
 		return Token{Type: IMPORT, Lit: ident}
+	case "if":
+		return Token{Type: IF, Lit: ident}
 	}
 	return Token{Type: IDENT, Lit: ident}
 }

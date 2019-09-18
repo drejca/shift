@@ -30,6 +30,7 @@ fn Add(a i32, b i32) : i32 {
 let a = 4 + 5
 let f = 0.6
 import fn log(num i32)
+if a != f {}
 `
 
 	tests := []struct {
@@ -77,6 +78,13 @@ import fn log(num i32)
 		{tokenType: token.IDENT, literal: "num"},
 		{tokenType: token.IDENT, literal: "i32"},
 		{tokenType: token.RPAREN, literal: ")"},
+		{tokenType: token.IF, literal: "if"},
+		// 40
+		{tokenType: token.IDENT, literal: "a"},
+		{tokenType: token.NOT_EQ, literal: "!="},
+		{tokenType: token.IDENT, literal: "f"},
+		{tokenType: token.LCURLY, literal: "{"},
+		{tokenType: token.RCURLY, literal: "}"},
 		{tokenType: token.EOF, literal: string(rune(token.EOF))},
 	}
 

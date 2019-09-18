@@ -2,12 +2,13 @@ package wasm
 
 import (
 	"fmt"
-	"github.com/drejca/shift/parser"
-	"github.com/drejca/shift/print"
-	"github.com/perlin-network/life/exec"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/drejca/shift/parser"
+	"github.com/drejca/shift/print"
+	"github.com/perlin-network/life/exec"
 )
 
 func TestEmptyMain(t *testing.T) {
@@ -51,7 +52,7 @@ fn main() {
 	}
 }
 
-type Resolver struct{
+type Resolver struct {
 	t *testing.T
 }
 
@@ -85,8 +86,12 @@ func TestEmitter(t *testing.T) {
 import fn assert(expected i32, actual i32)
 
 fn main() {
-	let res = Calc(6, 7)
-	assert(21, res)
+	let res = Calc(85, 25)
+	let expected = 197
+	
+	if res != expected {
+		assert(expected, res)
+	}
 }
 
 fn Calc(a i32, b i32) : i32 {

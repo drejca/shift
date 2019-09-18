@@ -15,6 +15,8 @@ type Lexer struct {
 	number bytes.Buffer
 
 	pos token.Position
+	curRune rune
+	peekRune rune
 }
 
 func New(input io.Reader) *Lexer {
@@ -74,6 +76,12 @@ func (l *Lexer) NextToken() token.Token {
 		return l.Token(token.PLUS, string(ch))
 	case '-':
 		return l.Token(token.MINUS, string(ch))
+	case '!':
+		if l.peek() == '=' {
+			l.read()
+			return l.Token(token.NOT_EQ, string("!="))
+		}
+		return l.Token(token.BANG, string(ch))
 	case '=':
 		return l.Token(token.ASSIGN, string(ch))
 	case eof:
@@ -158,6 +166,12 @@ func (l *Lexer) Token(tokenType token.Type, literal string) token.Token {
 	tok.Pos = l.pos
 	tok.Pos.Column = tok.Pos.Column - len(tok.Lit)
 	return tok
+}
+
+func (l *Lexer) peek() rune {
+	ch := l.read()
+	l.unread()
+	return ch
 }
 
 func (l *Lexer) read() rune {

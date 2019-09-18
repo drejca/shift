@@ -1,12 +1,16 @@
 package wasm
 
-import "fmt"
+import (
+	"fmt"
+
+	"bitbucket.org/sheran_gunasekera/leb128"
+)
 
 type Emmiter struct {
 	buf       []byte
 	sectionId int
 	sections  []section
-	errors []error
+	errors    []error
 }
 
 type section struct {
@@ -107,7 +111,7 @@ func (e *Emmiter) Emit(node Node) error {
 		e.externalKind(node.kind)
 	case *ConstInt:
 		e.emit(CONST_I32)
-		e.emit(byte(node.value))
+		e.emit(leb128.EncodeSLeb128(int32(node.value))...)
 	case *ValueType:
 		e.emit(e.typeOpCode(node.typeName))
 	case *ResultType:
@@ -137,6 +141,16 @@ func (e *Emmiter) Emit(node Node) error {
 
 		e.emit(CALL)
 		e.emit(byte(node.functionIndex))
+	case *If:
+		for _, op := range node.conditionOps {
+			e.Emit(op)
+		}
+		e.emit(IF)
+		e.emit(TYPE_EMPTY)
+		for _, op := range node.thenOps {
+			e.Emit(op)
+		}
+		e.emit(END_BLOCK)
 	case *LocalEntry:
 		e.emit(byte(node.count))
 		e.Emit(node.valueType)
@@ -153,6 +167,8 @@ func (e *Emmiter) Emit(node Node) error {
 		e.emit(I32_ADD)
 	case *Sub:
 		e.emit(I32_SUB)
+	case *NotEqual:
+		e.emit(I32_NOT_EQUAL)
 	}
 	return nil
 }

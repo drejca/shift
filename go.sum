@@ -1,3 +1,5 @@
+bitbucket.org/sheran_gunasekera/leb128 v0.0.0-20140310100139-ab5288260bc3 h1:GPAsh/PReGJKf6qUfa//Pd/o0szpNnHX7j5grKiQvr4=
+bitbucket.org/sheran_gunasekera/leb128 v0.0.0-20140310100139-ab5288260bc3/go.mod h1:kGybSb4gRdCgX9/IRNgUoHV9DiElvDuCYZGtcOK+Zpk=
 github.com/golang/protobuf v1.3.1 h1:YF8+flBXS5eO826T4nzqPrxfhQThhXl0YzfuUPu4SBg=
 github.com/golang/protobuf v1.3.1/go.mod h1:6lQm79b+lXiMfvg/cZm0SGofjICqVBUtrP5yJMmIC1U=
 github.com/perlin-network/life v0.0.0-20190402092845-c30697b41680 h1:4UXHUEwr0aE80GWFDob2IIgYWLfr7v9Fq7QON8/dLhM=

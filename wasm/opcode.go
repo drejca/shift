@@ -7,7 +7,7 @@ import (
 
 var (
 	WASM_MAGIC_NUM = []byte{0x00, 0x61, 0x73, 0x6d}
-	WASM_VERSION_1 = []byte{0x01, 0x00,0x00, 0x00}
+	WASM_VERSION_1 = []byte{0x01, 0x00, 0x00, 0x00}
 )
 
 const (
@@ -17,32 +17,39 @@ const (
 	BODY_END = 0x0b
 
 	// Module sections
-	SECTION_TYPE = 0x01
+	SECTION_TYPE   = 0x01
 	SECTION_IMPORT = 0x02
-	SECTION_FUNC = 0x03
+	SECTION_FUNC   = 0x03
 	SECTION_EXPORT = 0x07
-	SECTION_CODE = 0x0a
+	SECTION_CODE   = 0x0a
 
 	// Language Types
-	TYPE_I32 = 0x7f
-	TYPE_I64 = 0x7e
 	FUNC = 0x60
 
+	// Value Types
+	TYPE_I32   = 0x7f
+	TYPE_I64   = 0x7e
+	TYPE_EMPTY = 0x40
+
 	// Variable access
-	GET_LOCAL = 0x20
-	SET_LOCAL = 0x21
+	GET_LOCAL  = 0x20
+	SET_LOCAL  = 0x21
 	GET_GLOBAL = 0x23
 	SET_GLOBAL = 0x24
 
 	// Control flow operators
-	NOP = 0x01
+	NOP       = 0x01
+	IF        = 0x04
+	ELSE      = 0x05
+	END_BLOCK = 0x0b
 
 	// Call operators
 	CALL = 0x10
 
 	// Numeric operators
-	I32_ADD = 0x6a
-	I32_SUB = 0x6b
+	I32_ADD       = 0x6a
+	I32_SUB       = 0x6b
+	I32_NOT_EQUAL = 0x47
 
 	// external_kind kind for import/export
 	EXT_KIND_FUNC = 0x00
@@ -72,12 +79,13 @@ type Operation interface {
 }
 
 type Module struct {
-	typeSection *TypeSection
-	importSection *ImportSection
+	typeSection     *TypeSection
+	importSection   *ImportSection
 	functionSection *FunctionSection
-	exportSection *ExportSection
-	codeSection *CodeSection
+	exportSection   *ExportSection
+	codeSection     *CodeSection
 }
+
 func (m *Module) String() string {
 	var out bytes.Buffer
 	out.WriteString("(module ")
@@ -103,9 +111,10 @@ func (m *Module) String() string {
 }
 
 type TypeSection struct {
-	count uint32
+	count   uint32
 	entries []Type
 }
+
 func (t *TypeSection) sectionNode() {}
 func (t *TypeSection) String() string {
 	var out bytes.Buffer
@@ -130,14 +139,15 @@ func (t *TypeSection) findByIdx(typeIdx uint32) (typeEntry Type, found bool) {
 
 type FuncType struct {
 	functionIndex uint32
-	typeIndex uint32
-	name string
-	exported bool
-	paramCount uint32
-	paramTypes []*ValueType
-	resultCount uint32
-	resultType *ResultType
+	typeIndex     uint32
+	name          string
+	exported      bool
+	paramCount    uint32
+	paramTypes    []*ValueType
+	resultCount   uint32
+	resultType    *ResultType
 }
+
 func (f *FuncType) typeNode() {}
 func (f *FuncType) String() string {
 	var out bytes.Buffer
@@ -160,9 +170,10 @@ func (f *FuncType) TypeIndex() uint32 {
 }
 
 type ValueType struct {
-	name string
+	name     string
 	typeName string
 }
+
 func (v *ValueType) String() string {
 	var out bytes.Buffer
 	out.WriteString("(param ")
@@ -174,6 +185,7 @@ func (v *ValueType) String() string {
 type ResultType struct {
 	typeName string
 }
+
 func (r *ResultType) String() string {
 	var out bytes.Buffer
 	out.WriteString("(result ")
@@ -183,9 +195,10 @@ func (r *ResultType) String() string {
 }
 
 type ImportSection struct {
-	count uint
+	count   uint
 	entries []*ImportEntry
 }
+
 func (is *ImportSection) String() string {
 	var out bytes.Buffer
 	for _, entry := range is.entries {
@@ -197,9 +210,10 @@ func (is *ImportSection) String() string {
 
 type ImportEntry struct {
 	moduleName string
-	fieldName string
-	kind Type
+	fieldName  string
+	kind       Type
 }
+
 func (ie *ImportEntry) String() string {
 	var out bytes.Buffer
 	out.WriteString("(import ")
@@ -214,26 +228,29 @@ func (ie *ImportEntry) String() string {
 }
 
 type FunctionSection struct {
-	count uint
+	count   uint
 	entries []Type
 }
-func (f *FunctionSection) sectionNode() {}
+
+func (f *FunctionSection) sectionNode()   {}
 func (f *FunctionSection) String() string { return "" }
 
 type CodeSection struct {
-	count uint32
+	count  uint32
 	bodies []*FunctionBody
 }
-func (c *CodeSection) sectionNode() {}
-func (c *CodeSection) String() string { return ""}
+
+func (c *CodeSection) sectionNode()   {}
+func (c *CodeSection) String() string { return "" }
 
 type FunctionBody struct {
-	funcName string
-	bodySize uint32
+	funcName   string
+	bodySize   uint32
 	localCount uint32
-	locals []*LocalEntry
-	code []Operation
+	locals     []*LocalEntry
+	code       []Operation
 }
+
 func (f *FunctionBody) String() string {
 	var out bytes.Buffer
 	for _, local := range f.locals {
@@ -250,10 +267,11 @@ func (f *FunctionBody) String() string {
 }
 
 type Call struct {
-	name string
+	name          string
 	functionIndex uint32
-	arguments []Operation
+	arguments     []Operation
 }
+
 func (c *Call) operationNode() {}
 func (c *Call) String() string {
 	var out bytes.Buffer
@@ -269,10 +287,34 @@ func (c *Call) String() string {
 	return out.String()
 }
 
+type If struct {
+	conditionOps []Operation
+	thenOps      []Operation
+}
+
+func (i *If) operationNode() {}
+func (i *If) String() string {
+	var out bytes.Buffer
+	out.WriteString("(if \n")
+	for _, op := range i.conditionOps {
+		out.WriteString("	")
+		out.WriteString(op.String())
+	}
+	out.WriteString("	(then \n")
+	for _, op := range i.thenOps {
+		out.WriteString("		")
+		out.WriteString(op.String())
+	}
+	out.WriteString("	\n)")
+	out.WriteString("\n)")
+	return out.String()
+}
+
 type LocalEntry struct {
-	count uint32
+	count     uint32
 	valueType *ValueType
 }
+
 func (l *LocalEntry) operationNode() {}
 func (l *LocalEntry) String() string {
 	var out bytes.Buffer
@@ -285,9 +327,10 @@ func (l *LocalEntry) String() string {
 }
 
 type GetLocal struct {
-	name string
+	name       string
 	localIndex uint32
 }
+
 func (g *GetLocal) operationNode() {}
 func (g *GetLocal) String() string {
 	var out bytes.Buffer
@@ -297,9 +340,10 @@ func (g *GetLocal) String() string {
 }
 
 type SetGlobal struct {
-	name string
+	name        string
 	globalIndex uint32
 }
+
 func (s *SetGlobal) operationNode() {}
 func (s *SetGlobal) String() string {
 	var out bytes.Buffer
@@ -309,9 +353,10 @@ func (s *SetGlobal) String() string {
 }
 
 type SetLocal struct {
-	name string
+	name       string
 	localIndex uint32
 }
+
 func (s *SetLocal) operationNode() {}
 func (s *SetLocal) String() string {
 	var out bytes.Buffer
@@ -322,6 +367,7 @@ func (s *SetLocal) String() string {
 
 type Add struct {
 }
+
 func (a *Add) operationNode() {}
 func (a *Add) String() string {
 	var out bytes.Buffer
@@ -331,6 +377,7 @@ func (a *Add) String() string {
 
 type Sub struct {
 }
+
 func (s *Sub) operationNode() {}
 func (s *Sub) String() string {
 	var out bytes.Buffer
@@ -338,10 +385,21 @@ func (s *Sub) String() string {
 	return out.String()
 }
 
+type NotEqual struct {
+}
+
+func (n *NotEqual) operationNode() {}
+func (n *NotEqual) String() string {
+	var out bytes.Buffer
+	out.WriteString("i32.ne")
+	return out.String()
+}
+
 type ExportSection struct {
-	count uint32
+	count   uint32
 	entries []*ExportEntry
 }
+
 func (e *ExportSection) sectionNode() {}
 func (e *ExportSection) String() string {
 	var out bytes.Buffer
@@ -356,6 +414,7 @@ type ExportEntry struct {
 	field string
 	index uint32
 }
+
 func (e *ExportEntry) String() string {
 	var out bytes.Buffer
 	out.WriteString("(export \"")
@@ -367,9 +426,10 @@ func (e *ExportEntry) String() string {
 }
 
 type ConstInt struct {
-	value int64
+	value    int64
 	typeName string
 }
+
 func (c *ConstInt) operationNode() {}
 func (c *ConstInt) String() string {
 	var out bytes.Buffer
@@ -437,6 +497,7 @@ func printImportKind(fieldName string, typeKind Type) string {
 
 type NoOp struct {
 }
+
 func (n *NoOp) operationNode() {}
 func (n *NoOp) String() string {
 	var out bytes.Buffer
