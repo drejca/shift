@@ -172,8 +172,8 @@ func (c *Compiler) compileExpression(node ast.Node) []Operation {
 		return c.compileInfixExpression(node)
 	case *ast.ReturnStatement:
 		return c.compileExpression(node.ReturnValue)
-	case *ast.LetStatement:
-		return c.compileLetStatement(node)
+	case *ast.InitAssignExpression:
+		return c.compileInitAssignExpression(node)
 	case *ast.ExpressionStatement:
 		return c.compileExpression(node.Expression)
 	case *ast.CallExpression:
@@ -192,12 +192,12 @@ func (c *Compiler) compileExpression(node ast.Node) []Operation {
 	return []Operation{}
 }
 
-func (c *Compiler) compileLetStatement(letStatement *ast.LetStatement) []Operation {
+func (c *Compiler) compileInitAssignExpression(exp *ast.InitAssignExpression) []Operation {
 	var operations []Operation
 
-	symbol := c.symbolTable.Define(letStatement.Name.Value, c.inferType(letStatement.Value))
+	symbol := c.symbolTable.Define(exp.LeftExp.String(), c.inferType(exp.Value))
 
-	expressionOps := c.compileExpression(letStatement.Value)
+	expressionOps := c.compileExpression(exp.Value)
 	operations = append(operations, expressionOps...)
 
 	if symbol.Scope == GlobalScope {

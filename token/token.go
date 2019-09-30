@@ -2,13 +2,13 @@ package token
 
 type Token struct {
 	Type Type
-	Lit string // token literal text
-	Pos Position // token position
+	Lit  string   // token literal text
+	Pos  Position // token position
 }
 
 type Position struct {
-	Line     int    // line number, starting at 1
-	Column   int    // column number, starting at 1
+	Line   int // line number, starting at 1
+	Column int // column number, starting at 1
 }
 
 type CompileError interface {
@@ -18,7 +18,7 @@ type CompileError interface {
 
 type Type int
 
-const(
+const (
 	EOF Type = iota
 	ILLEGAL
 	UNKNOWN
@@ -33,7 +33,6 @@ const(
 	// Keywords
 	FUNC
 	RETURN
-	LET
 	IMPORT
 	IF
 
@@ -51,31 +50,31 @@ const(
 	PLUS
 	MINUS
 	ASSIGN
+	INIT_ASSIGN
 	BANG
 	NOT_EQ
 )
 
-var tokens = map[Type]string {
-	EOF: "EOF",
+var tokens = map[Type]string{
+	EOF:     "EOF",
 	ILLEGAL: "ILLEGAL",
 
 	PROGRAM: "PROGRAM",
 
 	// Identifiers + literals
 	IDENT: "IDENT",
-	INT: "INT",
+	INT:   "INT",
 	FLOAT: "FLOAT",
 
 	// Keywords
-	FUNC: "FUNC",
+	FUNC:   "FUNC",
 	RETURN: "RETURN",
-	LET: "LET",
 	IMPORT: "IMPORT",
-	IF: "IF",
+	IF:     "IF",
 
 	// Delimiters
-	COMMA: ",",
-	COLON: ":",
+	COMMA:     ",",
+	COLON:     ":",
 	SEMICOLON: ";",
 
 	LPAREN: "(",
@@ -84,10 +83,11 @@ var tokens = map[Type]string {
 	RCURLY: "}",
 
 	// Operators
-	PLUS: "+",
-	MINUS: "-",
-	ASSIGN: "=",
-	BANG: "!",
+	PLUS:        "+",
+	MINUS:       "-",
+	ASSIGN:      "=",
+	INIT_ASSIGN: ":=",
+	BANG:        "!",
 
 	NOT_EQ: "!=",
 }
@@ -106,8 +106,6 @@ func LookupIdent(ident string) Token {
 		return Token{Type: FUNC, Lit: ident}
 	case "return":
 		return Token{Type: RETURN, Lit: ident}
-	case "let":
-		return Token{Type: LET, Lit: ident}
 	case "import":
 		return Token{Type: IMPORT, Lit: ident}
 	case "if":

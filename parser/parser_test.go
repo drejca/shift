@@ -1,14 +1,16 @@
-package parser
+package parser_test
 
 import (
 	"errors"
 	"fmt"
-	"github.com/drejca/shift/assert"
-	"github.com/drejca/shift/print"
-	"github.com/drejca/shift/token"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/drejca/shift/assert"
+	"github.com/drejca/shift/parser"
+	"github.com/drejca/shift/print"
+	"github.com/drejca/shift/token"
 )
 
 func TestParseFunc(t *testing.T) {
@@ -16,14 +18,14 @@ func TestParseFunc(t *testing.T) {
 import fn assert(expected i32, actual i32)
 
 fn main() {
-	let res = Calc(6, 7)
+	res := Calc(6, 7)
 	if (21 != res) {
 		assert(21, res)
 	}
 }
 
 fn Calc(a i32, b i32) : i32 {
-	let c = 2
+	c := 2
 	c = (c + a)
 	return (add(a, b) + c)
 }
@@ -32,7 +34,7 @@ fn add(a i32, b i32) : i32 {
 	return (a + b)
 }
 `
-	p := New(strings.NewReader(input))
+	p := parser.New(strings.NewReader(input))
 	program, compilerError := p.ParseProgram()
 
 	if compilerError != nil {
@@ -47,10 +49,10 @@ fn add(a i32, b i32) : i32 {
 }
 
 func TestReturnStatement(t *testing.T) {
-	tests := []struct{
+	tests := []struct {
 		input string
-		err error
-	} {
+		err   error
+	}{
 		{input: `
 fn calc() {
 	return (2 - 1)
@@ -63,19 +65,13 @@ fn calc() {
 `},
 		{input: `
 fn calc() {
-	let a = (5 - 2)
+	a := (5 - 2)
 }
 `},
-		{input: `
-fn calc() {
-	let a i32 = (5 - 2)
-}
-`},
-		{input: `let a = 0.6`},
 	}
 
 	for _, test := range tests {
-		p := New(strings.NewReader(test.input))
+		p := parser.New(strings.NewReader(test.input))
 		program, compilerError := p.ParseProgram()
 
 		if compilerError != nil {
@@ -90,70 +86,70 @@ fn calc() {
 }
 
 func TestParseErrors(t *testing.T) {
-	tests := []struct{
-		input string
-		error ParseError
-	} {
-		{input: `fn () {}`, error: ParseError{
-			error: errors.New("missing function name"),
-			position: token.Position{Line: 1, Column: 3},
+	tests := []struct {
+		input    string
+		parseErr parser.ParseError
+	}{
+		{input: `fn () {}`, parseErr: parser.ParseError{
+			Err: errors.New("missing function name"),
+			Pos: token.Position{Line: 1, Column: 3},
 		}},
-		{input: `fn A() {return ~2}`, error: ParseError{
-				error: errors.New("illegal symbol ~"),
-			 	position: token.Position{Line: 1, Column: 16},
+		{input: `fn A() {return ~2}`, parseErr: parser.ParseError{
+			Err: errors.New("illegal symbol ~"),
+			Pos: token.Position{Line: 1, Column: 16},
 		}},
-		{input: `fn A() {return 5 + (2 - 1}`, error: ParseError{
-			error: errors.New("missing )"),
-			position: token.Position{Line: 1, Column: 26},
+		{input: `fn A() {return 5 + (2 - 1}`, parseErr: parser.ParseError{
+			Err: errors.New("missing )"),
+			Pos: token.Position{Line: 1, Column: 26},
 		}},
-		{input: `fn Add {}`, error: ParseError{
-			error: errors.New("missing ("),
-			position: token.Position{Line: 1, Column: 8},
+		{input: `fn Add {}`, parseErr: parser.ParseError{
+			Err: errors.New("missing ("),
+			Pos: token.Position{Line: 1, Column: 8},
 		}},
-		{input: `fn Add( {}`,error: ParseError{
-			error: errors.New("missing )"),
-			position: token.Position{Line: 1, Column: 9},
+		{input: `fn Add( {}`, parseErr: parser.ParseError{
+			Err: errors.New("missing )"),
+			Pos: token.Position{Line: 1, Column: 9},
 		}},
-		{input: `fn Add()`, error: ParseError{
-			error: errors.New("missing {"),
-			position: token.Position{Line: 1, Column: 9},
+		{input: `fn Add()`, parseErr: parser.ParseError{
+			Err: errors.New("missing {"),
+			Pos: token.Position{Line: 1, Column: 9},
 		}},
-		{input: `fn Add() {`, error: ParseError{
-			error: errors.New("missing }"),
-			position: token.Position{Line: 1, Column: 12},
+		{input: `fn Add() {`, parseErr: parser.ParseError{
+			Err: errors.New("missing }"),
+			Pos: token.Position{Line: 1, Column: 12},
 		}},
-		{input: `fn Add(a i32, b) {}`, error: ParseError{
-			error: errors.New("missing function parameter type"),
-			position: token.Position{Line: 1, Column: 15},
+		{input: `fn Add(a i32, b) {}`, parseErr: parser.ParseError{
+			Err: errors.New("missing function parameter type"),
+			Pos: token.Position{Line: 1, Column: 15},
 		}},
-		{input: `fn Add(a i32, b i32,) {}`, error: ParseError{
-			error: errors.New("trailing comma in parameters"),
-			position: token.Position{Line: 1, Column: 19},
+		{input: `fn Add(a i32, b i32,) {}`, parseErr: parser.ParseError{
+			Err: errors.New("trailing comma in parameters"),
+			Pos: token.Position{Line: 1, Column: 19},
 		}},
-		{input: `fn Add(a i32, b i32, {}`, error: ParseError{
-			error:    errors.New("trailing comma in parameters"),
-			position: token.Position{Line: 1, Column: 19},
+		{input: `fn Add(a i32, b i32, {}`, parseErr: parser.ParseError{
+			Err: errors.New("trailing comma in parameters"),
+			Pos: token.Position{Line: 1, Column: 19},
 		}},
 	}
 
 	for i, test := range tests {
-		p := New(strings.NewReader(test.input))
+		p := parser.New(strings.NewReader(test.input))
 		_, err := p.ParseProgram()
 
 		if err == nil {
 			t.Fatalf("%d) expected error for test", i+1)
 		}
 
-		if err.Error().Error() != test.error.Error().Error() {
-			t.Errorf("%d) \nexpected:\n %s\ngot:\n %s", i+1, test.error.Error(), err.Error())
+		if err.Error().Error() != test.parseErr.Err.Error() {
+			t.Errorf("%d) \nexpected:\n %s\ngot:\n %s", i+1, test.parseErr.Err, err.Error())
 		}
 
-		if err.Position().Line != test.error.position.Line {
-			t.Errorf("%d) expected line %d but got %d", i+1, test.error.position.Line, err.Position().Line)
+		if err.Position().Line != test.parseErr.Pos.Line {
+			t.Errorf("%d) expected line %d but got %d", i+1, test.parseErr.Pos.Line, err.Position().Line)
 		}
 
-		if err.Position().Column != test.error.position.Column {
-			t.Errorf("%d) expected column %d but got %d", i+1, test.error.position.Column, err.Position().Column)
+		if err.Position().Column != test.parseErr.Pos.Column {
+			t.Errorf("%d) expected column %d but got %d", i+1, test.parseErr.Pos.Column, err.Position().Column)
 		}
 	}
 }
@@ -166,7 +162,7 @@ func TestReadFromFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p := New(file)
+	p := parser.New(file)
 	_, parseErr := p.ParseProgram()
 
 	file.Close()

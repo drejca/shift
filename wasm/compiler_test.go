@@ -1,10 +1,12 @@
-package wasm
+package wasm_test
 
 import (
-	"github.com/drejca/shift/assert"
-	"github.com/drejca/shift/parser"
 	"strings"
 	"testing"
+
+	"github.com/drejca/shift/assert"
+	"github.com/drejca/shift/parser"
+	"github.com/drejca/shift/wasm"
 )
 
 func TestCompileMainToString(t *testing.T) {
@@ -18,7 +20,7 @@ fn main() {
 		t.Fatal(parseErr.Error())
 	}
 
-	compiler := NewCompiler()
+	compiler := wasm.NewCompiler()
 	wasmModule := compiler.CompileProgram(program)
 
 	for _, err := range compiler.Errors() {
@@ -42,12 +44,12 @@ func TestCompileToString(t *testing.T) {
 import fn assert(expected i32, actual i32)
 
 fn main() {
-	let res = Calc(6, 7)
+	res := Calc(6, 7)
 	assert(21, res)
 }
 
 fn Calc(a i32, b i32) : i32 {
-	let c = 2
+	c := 2
 	c = c + a
 	return add(a, b) + c
 }
@@ -62,7 +64,7 @@ fn add(a i32, b i32) : i32 {
 		t.Fatal(parseErr.Error())
 	}
 
-	compiler := NewCompiler()
+	compiler := wasm.NewCompiler()
 	wasmModule := compiler.CompileProgram(program)
 
 	for _, err := range compiler.Errors() {

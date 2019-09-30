@@ -2,28 +2,30 @@ package parser
 
 import (
 	"fmt"
+	"io"
+	"strconv"
+
 	"github.com/drejca/shift/ast"
 	"github.com/drejca/shift/lexer"
 	"github.com/drejca/shift/token"
-	"io"
-	"strconv"
 )
 
 const (
 	_ int = iota
 	LOWEST
-	EQUALS // =, ==, !=
-	SUM   // +, -
+	EQUALS // =, :=, ==, !=
+	SUM    // +, -
 	CALL
 )
 
 var precedences = map[token.Type]int{
-	token.ASSIGN: EQUALS,
-	token.NOT_EQ:   EQUALS,
-	token.PLUS:  SUM,
-	token.MINUS: SUM,
-	token.RPAREN: LOWEST,
-	token.LPAREN:   CALL,
+	token.INIT_ASSIGN: EQUALS,
+	token.ASSIGN:      EQUALS,
+	token.NOT_EQ:      EQUALS,
+	token.PLUS:        SUM,
+	token.MINUS:       SUM,
+	token.RPAREN:      LOWEST,
+	token.LPAREN:      CALL,
 }
 
 type Parser struct {
@@ -39,14 +41,15 @@ type Parser struct {
 }
 
 type ParseError struct {
-	position token.Position
-	error error
+	Pos token.Position
+	Err error
 }
+
 func (p ParseError) Position() token.Position {
-	return p.position
+	return p.Pos
 }
 func (p ParseError) Error() error {
-	return p.error
+	return p.Err
 }
 
 type (
@@ -67,6 +70,7 @@ func New(input io.Reader) *Parser {
 	p.infixParseFns = make(map[token.Type]infixParseFn)
 	p.registerInfix(token.PLUS, p.parseInfixExpression)
 	p.registerInfix(token.MINUS, p.parseInfixExpression)
+	p.registerInfix(token.INIT_ASSIGN, p.parseInitAssignExpression)
 	p.registerInfix(token.ASSIGN, p.parseAssignmentExpression)
 	p.registerInfix(token.NOT_EQ, p.parseInfixExpression)
 
@@ -97,20 +101,16 @@ func (p *Parser) parseGlobalStatement() (ast.Statement, token.CompileError) {
 	switch p.curToken.Type {
 	case token.FUNC:
 		return p.parseFunc()
-	case token.LET:
-		return p.parseLetStatement()
 	case token.IMPORT:
 		return p.parseImportStatement()
 	}
-	return nil, p.parseError(fmt.Errorf("non-declaration statement outside function body"), p.curToken, p.curToken.Pos.Column - 1)
+	return nil, p.parseError(fmt.Errorf("non-declaration statement outside function body"), p.curToken, p.curToken.Pos.Column-1)
 }
 
 func (p *Parser) parseLocalStatement() (ast.Statement, token.CompileError) {
 	switch p.curToken.Type {
 	case token.RETURN:
 		return p.parseReturn()
-	case token.LET:
-		return p.parseLetStatement()
 	}
 	return p.parseExpressionStatement()
 }
@@ -132,7 +132,7 @@ func (p *Parser) parseFunc() (*ast.Function, token.CompileError) {
 
 	fn := &ast.Function{
 		Signature: fnSignature,
-		Body: stmt,
+		Body:      stmt,
 	}
 
 	return fn, nil
@@ -140,7 +140,7 @@ func (p *Parser) parseFunc() (*ast.Function, token.CompileError) {
 
 func (p *Parser) parseFunctionSignature() (*ast.FunctionSignature, token.CompileError) {
 	if !p.expectPeek(token.IDENT) {
-		return nil, p.parseError(fmt.Errorf("missing function name"), p.curToken, p.curToken.Pos.Column + 2)
+		return nil, p.parseError(fmt.Errorf("missing function name"), p.curToken, p.curToken.Pos.Column+2)
 	}
 
 	fnSignature := &ast.FunctionSignature{
@@ -208,7 +208,7 @@ func (p *Parser) parseInputParam() (*ast.Parameter, token.CompileError) {
 	if p.peekTokenIs(token.IDENT) {
 		param.Ident = &ast.Identifier{Value: p.peekToken.Lit}
 	} else {
-		return nil, p.parseError(fmt.Errorf("trailing comma in parameters"), p.curToken, p.curToken.Pos.Column - 1)
+		return nil, p.parseError(fmt.Errorf("trailing comma in parameters"), p.curToken, p.curToken.Pos.Column-1)
 	}
 	p.nextToken()
 
@@ -287,35 +287,6 @@ func (p *Parser) parseReturn() (*ast.ReturnStatement, token.CompileError) {
 	return stmt, nil
 }
 
-func (p *Parser) parseLetStatement() (*ast.LetStatement, token.CompileError) {
-	stmt := &ast.LetStatement{Token: p.curToken}
-
-	if !p.expectPeek(token.IDENT) {
-		return nil, p.peekError(token.IDENT)
-	}
-
-	stmt.Name = &ast.Identifier{Token: p.curToken, Value: p.curToken.Lit}
-	stmt.Type = p.parseType()
-
-	if !p.expectPeek(token.ASSIGN) {
-		return nil, p.peekError(token.ASSIGN)
-	}
-
-	p.nextToken()
-
-	expression, err := p.parseExpression(LOWEST)
-	if err != nil {
-		return nil, err
-	}
-	stmt.Value = expression
-
-	if p.peekTokenIs(token.SEMICOLON) {
-		p.nextToken()
-	}
-
-	return stmt, nil
-}
-
 func (p *Parser) parseIfExpression() (ast.Expression, token.CompileError) {
 	p.nextToken()
 
@@ -325,7 +296,7 @@ func (p *Parser) parseIfExpression() (ast.Expression, token.CompileError) {
 	}
 
 	if !p.expectPeek(token.LCURLY) {
-		return nil, p.parseError(fmt.Errorf("missing { at beginning of if block"), p.curToken, p.curToken.Pos.Column + 2)
+		return nil, p.parseError(fmt.Errorf("missing { at beginning of if block"), p.curToken, p.curToken.Pos.Column+2)
 	}
 
 	stmt, err := p.parseBlockStatement()
@@ -338,7 +309,7 @@ func (p *Parser) parseIfExpression() (ast.Expression, token.CompileError) {
 
 func (p *Parser) parseImportStatement() (*ast.ImportStatement, token.CompileError) {
 	if !p.expectPeek(token.FUNC) {
-		return nil, p.parseError(fmt.Errorf("expected import function signature"), p.curToken, p.curToken.Pos.Column + 2)
+		return nil, p.parseError(fmt.Errorf("expected import function signature"), p.curToken, p.curToken.Pos.Column+2)
 	}
 
 	fnSignature, err := p.parseFunctionSignature()
@@ -373,7 +344,7 @@ func (p *Parser) parseExpressionStatement() (*ast.ExpressionStatement, token.Com
 
 func (p *Parser) parseAssignmentExpression(expression ast.Expression) (ast.Expression, token.CompileError) {
 	stmt := &ast.AssignmentExpression{
-		Token: p.curToken,
+		Token:      p.curToken,
 		Identifier: expression,
 	}
 	p.nextToken()
@@ -388,6 +359,28 @@ func (p *Parser) parseAssignmentExpression(expression ast.Expression) (ast.Expre
 		p.nextToken()
 	}
 	return stmt, nil
+}
+
+func (p *Parser) parseInitAssignExpression(expression ast.Expression) (ast.Expression, token.CompileError) {
+	exp := &ast.InitAssignExpression{LeftExp: expression}
+
+	if !p.curTokenIs(token.INIT_ASSIGN) {
+		return nil, p.peekError(token.INIT_ASSIGN)
+	}
+
+	p.nextToken()
+
+	expression, err := p.parseExpression(LOWEST)
+	if err != nil {
+		return nil, err
+	}
+	exp.Value = expression
+
+	if p.peekTokenIs(token.SEMICOLON) {
+		p.nextToken()
+	}
+
+	return exp, nil
 }
 
 func (p *Parser) parseExpression(precedence int) (ast.Expression, token.CompileError) {
@@ -564,17 +557,17 @@ func (p *Parser) peekTokenIs(tokenType token.Type) bool {
 
 func (p *Parser) error(tokenType token.Type) token.CompileError {
 	err := fmt.Errorf("missing %s", token.Print(tokenType))
-	return ParseError{position: p.curToken.Pos, error: err}
+	return ParseError{Pos: p.curToken.Pos, Err: err}
 }
 
 func (p *Parser) peekError(tokenType token.Type) token.CompileError {
 	err := fmt.Errorf("missing %s", token.Print(tokenType))
-	return ParseError{position: p.peekToken.Pos, error: err}
+	return ParseError{Pos: p.peekToken.Pos, Err: err}
 }
 
 func (p *Parser) parseError(err error, tok token.Token, column int) token.CompileError {
 	pos := token.Position{Line: tok.Pos.Line, Column: column}
-	return ParseError{position: pos, error: err}
+	return ParseError{Pos: pos, Err: err}
 }
 
 func (p *Parser) nextToken() {

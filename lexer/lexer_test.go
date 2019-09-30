@@ -1,25 +1,12 @@
-package lexer
+package lexer_test
 
 import (
-	"github.com/drejca/shift/token"
 	"strings"
 	"testing"
+
+	"github.com/drejca/shift/lexer"
+	"github.com/drejca/shift/token"
 )
-
-func TestReadRune(t *testing.T) {
-	input := `
-fn Add(a i32, b i32) : i32 {
-	return a + b
-}`
-	lex := New(strings.NewReader(input))
-
-	for _, ch := range input {
-		rune := lex.read()
-		if rune != ch {
-			t.Errorf("expected to Read rune %q got %q", ch, rune)
-		}
-	}
-}
 
 func TestNextToken(t *testing.T) {
 	input := `
@@ -27,16 +14,16 @@ fn Add(a i32, b i32) : i32 {
 	return a + b
 }~
 2 - 1
-let a = 4 + 5
-let f = 0.6
+a := 4 + 5
+f := 0.6
 import fn log(num i32)
 if a != f {}
 `
 
 	tests := []struct {
 		tokenType token.Type
-		literal string
-	} {
+		literal   string
+	}{
 		{tokenType: token.FUNC, literal: "fn"},
 		{tokenType: token.IDENT, literal: "Add"},
 		{tokenType: token.LPAREN, literal: "("},
@@ -46,7 +33,6 @@ if a != f {}
 		{tokenType: token.IDENT, literal: "b"},
 		{tokenType: token.IDENT, literal: "i32"},
 		{tokenType: token.RPAREN, literal: ")"},
-		// 10
 		{tokenType: token.COLON, literal: ":"},
 		{tokenType: token.IDENT, literal: "i32"},
 		{tokenType: token.LCURLY, literal: "{"},
@@ -57,19 +43,15 @@ if a != f {}
 		{tokenType: token.RCURLY, literal: "}"},
 		{tokenType: token.ILLEGAL, literal: "~"},
 		{tokenType: token.INT, literal: "2"},
-		// 20
 		{tokenType: token.MINUS, literal: "-"},
 		{tokenType: token.INT, literal: "1"},
-		{tokenType: token.LET, literal: "let"},
 		{tokenType: token.IDENT, literal: "a"},
-		{tokenType: token.ASSIGN, literal: "="},
+		{tokenType: token.INIT_ASSIGN, literal: ":="},
 		{tokenType: token.INT, literal: "4"},
 		{tokenType: token.PLUS, literal: "+"},
 		{tokenType: token.INT, literal: "5"},
-		{tokenType: token.LET, literal: "let"},
 		{tokenType: token.IDENT, literal: "f"},
-		// 30
-		{tokenType: token.ASSIGN, literal: "="},
+		{tokenType: token.INIT_ASSIGN, literal: ":="},
 		{tokenType: token.FLOAT, literal: "0.6"},
 		{tokenType: token.IMPORT, literal: "import"},
 		{tokenType: token.FUNC, literal: "fn"},
@@ -79,7 +61,6 @@ if a != f {}
 		{tokenType: token.IDENT, literal: "i32"},
 		{tokenType: token.RPAREN, literal: ")"},
 		{tokenType: token.IF, literal: "if"},
-		// 40
 		{tokenType: token.IDENT, literal: "a"},
 		{tokenType: token.NOT_EQ, literal: "!="},
 		{tokenType: token.IDENT, literal: "f"},
@@ -88,17 +69,17 @@ if a != f {}
 		{tokenType: token.EOF, literal: string(rune(token.EOF))},
 	}
 
-	lex := New(strings.NewReader(input))
+	lex := lexer.New(strings.NewReader(input))
 
-	for i, test := range tests {
+	for _, test := range tests {
 		tok := lex.NextToken()
 
 		if tok.Type != test.tokenType {
-			t.Errorf("tests[%d] - wrong type. Expected %q but got %q", i+1, token.Print(test.tokenType), token.Print(tok.Type))
+			t.Errorf("line %d, column %d - wrong type. Expected %q but got %q", tok.Pos.Line, tok.Pos.Column, token.Print(test.tokenType), token.Print(tok.Type))
 		}
 
 		if tok.Lit != test.literal {
-			t.Errorf("tests[%d] - wrong literal. Expected %q but got %q", i+1, test.literal, tok.Lit)
+			t.Errorf("line %d, column %d - wrong literal. Expected %q but got %q", tok.Pos.Line, tok.Pos.Column, test.literal, tok.Lit)
 		}
 	}
 }
@@ -109,10 +90,10 @@ fn Sub(a i32, b i32) : i32 {
 	return a - b
 }
 `
-	tests := []struct{
+	tests := []struct {
 		tokenType token.Type
-		literal string
-		pos token.Position
+		literal   string
+		pos       token.Position
 	}{
 		{tokenType: token.FUNC, literal: "fn", pos: token.Position{Line: 2, Column: 1}},
 		{tokenType: token.IDENT, literal: "Sub", pos: token.Position{Line: 2, Column: 4}},
@@ -134,7 +115,7 @@ fn Sub(a i32, b i32) : i32 {
 		{tokenType: token.EOF, literal: string(rune(token.EOF)), pos: token.Position{Line: 5, Column: 1}},
 	}
 
-	lex := New(strings.NewReader(input))
+	lex := lexer.New(strings.NewReader(input))
 
 	for i, test := range tests {
 		tok := lex.NextToken()
@@ -153,27 +134,6 @@ fn Sub(a i32, b i32) : i32 {
 
 		if tok.Pos.Column != test.pos.Column {
 			t.Errorf("tests[%d] %q - column number. Expected %d but got %d", i, test.literal, test.pos.Column, tok.Pos.Column)
-		}
-	}
-}
-
-func TestIsLetter(t *testing.T) {
-	tests := []struct {
-		ch rune
-		isLetter bool
-	} {
-		{ch: 'a', isLetter: true},
-		{ch: 'b', isLetter: true},
-		{ch: '@', isLetter: false},
-		{ch: 'z', isLetter: true},
-		{ch: 'A', isLetter: true},
-		{ch: 'Z', isLetter: true},
-		{ch: '[', isLetter: false},
-	}
-
-	for i, test := range tests {
-		if isLetter(test.ch) != test.isLetter {
-			t.Errorf("tests[%d] - expected isLetter for ch(%q) to return %t got %t", i, test.ch, test.isLetter, isLetter(test.ch))
 		}
 	}
 }

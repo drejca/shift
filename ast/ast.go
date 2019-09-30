@@ -2,8 +2,9 @@ package ast
 
 import (
 	"bytes"
-	"github.com/drejca/shift/token"
 	"strings"
+
+	"github.com/drejca/shift/token"
 )
 
 type Node interface {
@@ -39,8 +40,8 @@ func (p *Program) String() string {
 }
 
 type Function struct {
-	Signature 	*FunctionSignature
-	Body         *BlockStatement
+	Signature *FunctionSignature
+	Body      *BlockStatement
 }
 
 func (f *Function) statementNode() {}
@@ -111,7 +112,7 @@ func (p *Parameter) String() string {
 type BlockStatement struct {
 	FirstToken token.Token
 	Statements []Statement
-	Depth int
+	Depth      int
 }
 
 func (b *BlockStatement) statementNode() {}
@@ -155,32 +156,6 @@ func (r *ReturnStatement) String() string {
 	return out.String()
 }
 
-type LetStatement struct {
-	Token token.Token
-	Name  *Identifier
-	Type  string
-	Value Expression
-}
-
-func (ls *LetStatement) statementNode() {}
-func (ls *LetStatement) String() string {
-	var out bytes.Buffer
-
-	out.WriteString(ls.Token.Lit + " ")
-	out.WriteString(ls.Name.String())
-	if ls.Type != "" {
-		out.WriteString(" ")
-		out.WriteString(ls.Type)
-	}
-	out.WriteString(" = ")
-
-	if ls.Value != nil {
-		out.WriteString(ls.Value.String())
-	}
-
-	return out.String()
-}
-
 type ImportStatement struct {
 	FuncSignature *FunctionSignature
 }
@@ -208,6 +183,30 @@ func (es *ExpressionStatement) String() string {
 		return es.Expression.String()
 	}
 	return ""
+}
+
+type InitAssignExpression struct {
+	LeftExp Expression
+	Type    string
+	Value   Expression
+}
+
+func (ia *InitAssignExpression) expressionNode() {}
+func (ia *InitAssignExpression) String() string {
+	var out bytes.Buffer
+
+	out.WriteString(ia.LeftExp.String())
+	if ia.Type != "" {
+		out.WriteString(" ")
+		out.WriteString(ia.Type)
+	}
+	out.WriteString(" := ")
+
+	if ia.Value != nil {
+		out.WriteString(ia.Value.String())
+	}
+
+	return out.String()
 }
 
 type CallExpression struct {
@@ -253,7 +252,7 @@ func (as *AssignmentExpression) String() string {
 
 type IfExpression struct {
 	Condition Expression
-	Body *BlockStatement
+	Body      *BlockStatement
 }
 
 func (ie *IfExpression) expressionNode() {}

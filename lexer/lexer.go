@@ -3,19 +3,20 @@ package lexer
 import (
 	"bufio"
 	"bytes"
-	"github.com/drejca/shift/token"
 	"io"
+
+	"github.com/drejca/shift/token"
 )
 
 var eof = rune(token.EOF)
 
 type Lexer struct {
-	buf *bufio.Reader
-	ident bytes.Buffer
+	buf    *bufio.Reader
+	ident  bytes.Buffer
 	number bytes.Buffer
 
-	pos token.Position
-	curRune rune
+	pos      token.Position
+	curRune  rune
 	peekRune rune
 }
 
@@ -61,6 +62,10 @@ func (l *Lexer) NextToken() token.Token {
 	case ',':
 		return l.Token(token.COMMA, string(ch))
 	case ':':
+		if l.peek() == '=' {
+			l.read()
+			return l.Token(token.INIT_ASSIGN, string(":="))
+		}
 		return l.Token(token.COLON, string(ch))
 	case ';':
 		return l.Token(token.SEMICOLON, string(ch))
@@ -187,5 +192,5 @@ func (l *Lexer) unread() {
 
 func isNewLine(ch rune) bool    { return ch == '\n' || ch == '\r' }
 func isWhitespace(ch rune) bool { return ch == ' ' || ch == '\t' }
-func isLetter(ch rune) bool { return 'a' <= ch && ch <= 'z' || 'A' <= ch && ch <= 'Z'}
-func isDigit(ch rune) bool { return '0' <= ch && ch <= '9'}
+func isLetter(ch rune) bool     { return 'a' <= ch && ch <= 'z' || 'A' <= ch && ch <= 'Z' }
+func isDigit(ch rune) bool      { return '0' <= ch && ch <= '9' }

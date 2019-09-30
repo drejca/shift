@@ -20,13 +20,12 @@ func TestPrintUnknownToken(t *testing.T) {
 }
 
 func TestLookupIdent(t *testing.T) {
-	tests := []struct{
-		ident string
+	tests := []struct {
+		ident       string
 		expectToken Token
-	} {
+	}{
 		{ident: "fn", expectToken: Token{Lit: "fn", Type: FUNC}},
 		{ident: "return", expectToken: Token{Lit: "return", Type: RETURN}},
-		{ident: "let", expectToken: Token{Lit: "let", Type: LET}},
 		{ident: "name", expectToken: Token{Lit: "name", Type: IDENT}},
 		{ident: "import", expectToken: Token{Lit: "import", Type: IMPORT}},
 		{ident: "if", expectToken: Token{Lit: "if", Type: IF}},

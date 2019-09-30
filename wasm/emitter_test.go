@@ -1,4 +1,4 @@
-package wasm
+package wasm_test
 
 import (
 	"fmt"
@@ -8,6 +8,7 @@ import (
 
 	"github.com/drejca/shift/parser"
 	"github.com/drejca/shift/print"
+	"github.com/drejca/shift/wasm"
 	"github.com/perlin-network/life/exec"
 )
 
@@ -22,14 +23,14 @@ fn main() {
 		t.Fatal(parseErr.Error())
 	}
 
-	compiler := NewCompiler()
+	compiler := wasm.NewCompiler()
 	wasmModule := compiler.CompileProgram(program)
 
 	for _, err := range compiler.Errors() {
 		t.Error(err)
 	}
 
-	emitter := NewEmitter()
+	emitter := wasm.NewEmitter()
 	err := emitter.Emit(wasmModule)
 	if err != nil {
 		t.Error(err)
@@ -86,8 +87,8 @@ func TestEmitter(t *testing.T) {
 import fn assert(expected i32, actual i32)
 
 fn main() {
-	let res = Calc(85, 25)
-	let expected = 197
+	res := Calc(85, 25)
+	expected := 197
 	
 	if res != expected {
 		assert(expected, res)
@@ -95,7 +96,7 @@ fn main() {
 }
 
 fn Calc(a i32, b i32) : i32 {
-	let c = 2
+	c := 2
 	c = c + a
 	return add(a, b) + c
 }
@@ -110,14 +111,14 @@ fn add(a i32, b i32) : i32 {
 		t.Fatal(parseErr.Error())
 	}
 
-	compiler := NewCompiler()
+	compiler := wasm.NewCompiler()
 	wasmModule := compiler.CompileProgram(program)
 
 	for _, err := range compiler.Errors() {
 		t.Error(err)
 	}
 
-	emitter := NewEmitter()
+	emitter := wasm.NewEmitter()
 	err := emitter.Emit(wasmModule)
 	if err != nil {
 		t.Error(err)
@@ -166,14 +167,14 @@ func TestCompilingFromFile(t *testing.T) {
 	}
 	file.Close()
 
-	compiler := NewCompiler()
+	compiler := wasm.NewCompiler()
 	wasmModule := compiler.CompileProgram(program)
 
 	for _, err := range compiler.Errors() {
 		t.Fatal(err)
 	}
 
-	emitter := NewEmitter()
+	emitter := wasm.NewEmitter()
 	err = emitter.Emit(wasmModule)
 	if err != nil {
 		t.Fatal(err)
