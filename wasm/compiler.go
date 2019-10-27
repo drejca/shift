@@ -13,6 +13,8 @@ type Compiler struct {
 	functionBody  *FunctionBody
 	typeIndex     uint32
 	functionIndex uint32
+	dataIndex     uint32
+	dataOffset    int32
 
 	errors []error
 }
@@ -28,8 +30,10 @@ func (c *Compiler) CompileProgram(program *ast.Program) *Module {
 		typeSection:     &TypeSection{},
 		importSection:   &ImportSection{},
 		functionSection: &FunctionSection{},
+		memorySection:   &MemorySection{},
 		exportSection:   &ExportSection{},
 		codeSection:     &CodeSection{},
+		dataSection:     &DataSection{},
 	}
 
 	for _, stmt := range program.Statements {
@@ -58,6 +62,15 @@ func (c *Compiler) CompileProgram(program *ast.Program) *Module {
 		}
 	}
 
+	if c.module.dataSection.count > 0 {
+		c.module.memorySection.count = 1
+		memoryType := MemoryType{
+			flags:         uint32(0),
+			initialLength: uint32(1),
+		}
+		c.module.memorySection.entries = append(c.module.memorySection.entries, &memoryType)
+	}
+
 	return c.module
 }
 
@@ -67,9 +80,12 @@ func (c *Compiler) compileFunctionSignature(functionSignature *ast.FunctionSigna
 	}
 
 	for _, param := range functionSignature.InputParams {
-		valueType := &ValueType{name: param.Ident.Value, typeName: param.Type}
-		funcType.paramTypes = append(funcType.paramTypes, valueType)
-		funcType.paramCount++
+		valueTypes := c.compileFuncInputParam(param)
+
+		for _, valueType := range valueTypes {
+			funcType.paramTypes = append(funcType.paramTypes, valueType)
+			funcType.paramCount++
+		}
 	}
 
 	if len(functionSignature.ReturnParams) > 1 {
@@ -92,6 +108,18 @@ func (c *Compiler) compileFunctionSignature(functionSignature *ast.FunctionSigna
 	}
 
 	return funcType
+}
+
+func (c *Compiler) compileFuncInputParam(param *ast.Parameter) []*ValueType {
+	switch param.Type {
+	case "string":
+		offset := &ValueType{name: "offset", typeName: "i32"}
+		strLength := &ValueType{name: "length", typeName: "i32"}
+		return []*ValueType{offset, strLength}
+	default:
+		valueType := &ValueType{name: param.Ident.Value, typeName: param.Type}
+		return []*ValueType{valueType}
+	}
 }
 
 func (c *Compiler) findFunctionType(paramTypes []*ValueType, resultType *ResultType) (funcType *FuncType, found bool) {
@@ -187,6 +215,12 @@ func (c *Compiler) compileExpression(node ast.Node) []Operation {
 	case *ast.IntegerLiteral:
 		constInt := &ConstInt{value: node.Value, typeName: "i32"}
 		return []Operation{constInt}
+	case *ast.String:
+		c.addData([]byte(node.Value))
+
+		offset := &ConstInt{value: 0, typeName: "i32"}
+		strLength := &ConstInt{value: int64(len(node.Value)), typeName: "i32"}
+		return []Operation{offset, strLength}
 	}
 	c.handleError(fmt.Errorf("unknown type %s", reflect.TypeOf(node)))
 	return []Operation{}
@@ -360,6 +394,18 @@ func (c *Compiler) appendCodeSection(funcBody *FunctionBody) {
 	c.module.codeSection.count++
 }
 
+func (c *Compiler) addData(data []byte) {
+	dataSegment := DataSegment{
+		index:  c.dataIndex,
+		offset: c.dataOffset,
+		size:   uint32(len(data)),
+		data:   data,
+	}
+	c.module.dataSection.entries = append(c.module.dataSection.entries, &dataSegment)
+	c.module.dataSection.count++
+	c.dataIndex++
+}
+
 func (c *Compiler) handleError(err error) {
 	if err != nil {
 		c.errors = append(c.errors, err)
@@ -373,7 +419,6 @@ func (c *Compiler) functionSymbol(callExpression ast.Node) (symbol Symbol, found
 	default:
 		return c.symbolTable.Resolve(callExpression.String())
 	}
-	return Symbol{}, false
 }
 
 func (c *Compiler) inferType(expression ast.Expression) string {

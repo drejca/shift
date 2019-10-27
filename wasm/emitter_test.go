@@ -3,7 +3,6 @@ package wasm_test
 import (
 	"fmt"
 	"os"
-	"strings"
 	"testing"
 
 	"github.com/drejca/shift/parser"
@@ -11,47 +10,6 @@ import (
 	"github.com/drejca/shift/wasm"
 	"github.com/perlin-network/life/exec"
 )
-
-func TestEmptyMain(t *testing.T) {
-	input := `
-fn main() {
-}
-`
-	p := parser.New(strings.NewReader(input))
-	program, parseErr := p.ParseProgram()
-	if parseErr != nil {
-		t.Fatal(parseErr.Error())
-	}
-
-	compiler := wasm.NewCompiler()
-	wasmModule := compiler.CompileProgram(program)
-
-	for _, err := range compiler.Errors() {
-		t.Error(err)
-	}
-
-	emitter := wasm.NewEmitter()
-	err := emitter.Emit(wasmModule)
-	if err != nil {
-		t.Error(err)
-	}
-
-	vm, err := exec.NewVirtualMachine(emitter.Bytes(), exec.VMConfig{}, &exec.NopResolver{}, nil)
-	if err != nil {
-		panic(err)
-	}
-
-	entryID, ok := vm.GetFunctionExport("main")
-	if !ok {
-		panic("entry function not found")
-	}
-
-	_, err = vm.Run(entryID)
-	if err != nil {
-		vm.PrintStackTrace()
-		panic(err)
-	}
-}
 
 type Resolver struct {
 	t *testing.T
@@ -61,13 +19,12 @@ func (r *Resolver) ResolveFunc(module string, field string) exec.FunctionImport 
 	switch module {
 	case "env":
 		switch field {
-		case "assert":
+		case "error":
 			return func(vm *exec.VirtualMachine) int64 {
-				expected := uint32(vm.GetCurrentFrame().Locals[0])
-				actual := uint32(vm.GetCurrentFrame().Locals[1])
-				if expected != actual {
-					r.t.Errorf("expected %d got %d", expected, actual)
-				}
+				offset := uint32(vm.GetCurrentFrame().Locals[0])
+				msgLength := uint32(vm.GetCurrentFrame().Locals[1])
+				msg := string(vm.Memory[offset:msgLength])
+				r.t.Error(msg)
 				return 0
 			}
 		default:
@@ -82,101 +39,77 @@ func (r *Resolver) ResolveGlobal(module, field string) int64 {
 	panic("we're not resolving global variables for now")
 }
 
-func TestEmitter(t *testing.T) {
-	input := `
-import fn assert(expected i32, actual i32)
-
-fn main() {
-	res := Calc(85, 25)
-	expected := 197
-	
-	if res != expected {
-		assert(expected, res)
-	}
-}
-
-fn Calc(a i32, b i32) : i32 {
-	c := 2
-	c = c + a
-	return add(a, b) + c
-}
-
-fn add(a i32, b i32) : i32 {
-	return a + b
-}
-`
-	p := parser.New(strings.NewReader(input))
-	program, parseErr := p.ParseProgram()
-	if parseErr != nil {
-		t.Fatal(parseErr.Error())
-	}
-
-	compiler := wasm.NewCompiler()
-	wasmModule := compiler.CompileProgram(program)
-
-	for _, err := range compiler.Errors() {
-		t.Error(err)
-	}
-
-	emitter := wasm.NewEmitter()
-	err := emitter.Emit(wasmModule)
-	if err != nil {
-		t.Error(err)
-	}
-
-	resolver := &Resolver{t: t}
-
-	vm, err := exec.NewVirtualMachine(emitter.Bytes(), exec.VMConfig{}, resolver, nil)
-	if err != nil {
-		panic(err)
-	}
-
-	entryID, ok := vm.GetFunctionExport("main")
-	if !ok {
-		panic("entry function not found")
-	}
-
-	_, err = vm.Run(entryID)
-	if err != nil {
-		vm.PrintStackTrace()
-		panic(err)
-	}
-}
-
 func TestCompilingFromFile(t *testing.T) {
-	filename := "../testprogram/main.sf"
-
-	file, err := os.Open(filename)
-	if err != nil {
-		t.Fatal(err)
+	testCases := []struct {
+		name string
+		file string
+	}{
+		{
+			name: "empty main main.sf",
+			file: "../testprogram/empty_main.sf",
+		},
+		{
+			name: "main.sf Add function",
+			file: "../testprogram/main.sf",
+		},
+		{
+			name: "operators tests",
+			file: "../testprogram/operators.sf",
+		},
 	}
 
-	p := parser.New(file)
-	program, parseErr := p.ParseProgram()
+	for _, tc := range testCases {
 
-	file.Close()
-
-	if parseErr != nil {
-		refile, err := os.Open(filename)
+		file, err := os.Open(tc.file)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		printer := print.New(refile)
-		t.Fatal(printer.PrintError(parseErr))
-	}
-	file.Close()
+		p := parser.New(file)
+		program, parseErr := p.ParseProgram()
 
-	compiler := wasm.NewCompiler()
-	wasmModule := compiler.CompileProgram(program)
+		file.Close()
 
-	for _, err := range compiler.Errors() {
-		t.Fatal(err)
-	}
+		if parseErr != nil {
+			refile, err := os.Open(tc.file)
+			if err != nil {
+				t.Fatal(err)
+			}
 
-	emitter := wasm.NewEmitter()
-	err = emitter.Emit(wasmModule)
-	if err != nil {
-		t.Fatal(err)
+			printer := print.New(refile)
+			t.Fatal(printer.PrintError(parseErr))
+		}
+		file.Close()
+
+		compiler := wasm.NewCompiler()
+		wasmModule := compiler.CompileProgram(program)
+
+		for _, err := range compiler.Errors() {
+			t.Fatal(err)
+		}
+
+		emitter := wasm.NewEmitter()
+		err = emitter.Emit(wasmModule)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		resolver := &Resolver{t: t}
+
+		vm, err := exec.NewVirtualMachine(emitter.Bytes(), exec.VMConfig{}, resolver, nil)
+		if err != nil {
+			panic(err)
+		}
+
+		entryID, ok := vm.GetFunctionExport("main")
+		if !ok {
+			panic("entry function not found")
+		}
+
+		_, err = vm.Run(entryID)
+		if err != nil {
+			vm.PrintStackTrace()
+			panic(err)
+		}
 	}
 }

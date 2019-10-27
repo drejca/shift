@@ -309,3 +309,11 @@ type FloatLiteral struct {
 
 func (f *FloatLiteral) expressionNode() {}
 func (f *FloatLiteral) String() string  { return f.Token.Lit }
+
+type String struct {
+	Token token.Token
+	Value string
+}
+
+func (s *String) expressionNode() {}
+func (s *String) String() string  { return `"` + s.Value + `"` }

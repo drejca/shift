@@ -38,11 +38,17 @@ func (e *Emmiter) Emit(node Node) error {
 		if node.functionSection.count > 0 {
 			e.Emit(node.functionSection)
 		}
+		if node.memorySection.count > 0 {
+			e.Emit(node.memorySection)
+		}
 		if node.exportSection.count > 0 {
 			e.Emit(node.exportSection)
 		}
 		if node.codeSection.count > 0 {
 			e.Emit(node.codeSection)
+		}
+		if node.dataSection.count > 0 {
+			e.Emit(node.dataSection)
 		}
 	case *TypeSection:
 		e.emit(SECTION_TYPE)
@@ -62,15 +68,6 @@ func (e *Emmiter) Emit(node Node) error {
 			e.Emit(importEntry)
 		}
 		e.endSection(sectionId)
-	case *ExportSection:
-		e.emit(SECTION_EXPORT)
-		sectionId := e.startSection()
-
-		e.emit(byte(node.count))
-		for _, exportEntry := range node.entries {
-			e.Emit(exportEntry)
-		}
-		e.endSection(sectionId)
 	case *FunctionSection:
 		e.emit(SECTION_FUNC)
 		sectionId := e.startSection()
@@ -78,6 +75,24 @@ func (e *Emmiter) Emit(node Node) error {
 		e.emit(byte(node.count))
 		for _, typeEntry := range node.entries {
 			e.emit(byte(typeEntry.TypeIndex()))
+		}
+		e.endSection(sectionId)
+	case *MemorySection:
+		e.emit(SECTION_MEMORY)
+		sectionId := e.startSection()
+
+		e.emit(byte(node.count))
+		for _, memoryType := range node.entries {
+			e.Emit(memoryType)
+		}
+		e.endSection(sectionId)
+	case *ExportSection:
+		e.emit(SECTION_EXPORT)
+		sectionId := e.startSection()
+
+		e.emit(byte(node.count))
+		for _, exportEntry := range node.entries {
+			e.Emit(exportEntry)
 		}
 		e.endSection(sectionId)
 	case *CodeSection:
@@ -89,16 +104,15 @@ func (e *Emmiter) Emit(node Node) error {
 			e.Emit(functionBody)
 		}
 		e.endSection(sectionId)
-	case *FuncType:
-		e.emit(FUNC)
-		e.emit(byte(node.paramCount))
-		for _, valueType := range node.paramTypes {
-			e.Emit(valueType)
+	case *DataSection:
+		e.emit(SECTION_DATA)
+		sectionId := e.startSection()
+
+		e.emit(byte(node.count))
+		for _, dataSegment := range node.entries {
+			e.Emit(dataSegment)
 		}
-		e.emit(byte(node.resultCount))
-		if node.resultType != nil {
-			e.Emit(node.resultType)
-		}
+		e.endSection(sectionId)
 	case *ImportEntry:
 		moduleNameLen := uint32(len(node.moduleName))
 		e.emit(byte(moduleNameLen))
@@ -109,20 +123,43 @@ func (e *Emmiter) Emit(node Node) error {
 		e.emit([]byte(node.fieldName)...)
 
 		e.externalKind(node.kind)
+	case *FuncType:
+		e.emit(FUNC)
+		e.emit(byte(node.paramCount))
+		for _, valueType := range node.paramTypes {
+			e.Emit(valueType)
+		}
+		e.emit(byte(node.resultCount))
+		if node.resultType != nil {
+			e.Emit(node.resultType)
+		}
+	case *DataSegment:
+		e.emit(byte(node.index))
+		e.emit(CONST_I32)
+		e.emit(leb128.EncodeSLeb128(int32(node.offset))...)
+		e.emit(BODY_END)
+		e.emit(byte(node.size))
+		e.emit(node.data...)
+	case *MemoryType:
+		e.emit(byte(node.flags))
+		e.emit(byte(node.initialLength))
+		if node.flags > 0 {
+			e.emit(byte(node.maximum))
+		}
 	case *ConstInt:
 		e.emit(CONST_I32)
 		e.emit(leb128.EncodeSLeb128(int32(node.value))...)
 	case *ValueType:
-		e.emit(e.typeOpCode(node.typeName))
+		e.emit(e.typeOpCode(node.typeName)...)
 	case *ResultType:
-		e.emit(e.typeOpCode(node.typeName))
+		e.emit(e.typeOpCode(node.typeName)...)
 	case *ExportEntry:
 		e.emit(byte(len(node.field)))
 		e.emit([]byte(node.field)...)
 		e.emit(EXT_KIND_FUNC)
 		e.emit(byte(node.index))
 	case *FunctionBody:
-		sectionId := e.startSection()
+		sectionID := e.startSection()
 
 		e.emit(byte(node.localCount))
 		for _, localEntry := range node.locals {
@@ -133,7 +170,7 @@ func (e *Emmiter) Emit(node Node) error {
 		}
 		e.emit(BODY_END)
 
-		e.endSection(sectionId)
+		e.endSection(sectionID)
 	case *Call:
 		for _, op := range node.arguments {
 			e.Emit(op)
@@ -173,16 +210,18 @@ func (e *Emmiter) Emit(node Node) error {
 	return nil
 }
 
-func (e *Emmiter) typeOpCode(typeName string) byte {
+func (e *Emmiter) typeOpCode(typeName string) []byte {
 	switch typeName {
 	case "i32":
-		return TYPE_I32
+		return []byte{TYPE_I32}
 	case "int":
 	case "i64":
-		return TYPE_I64
+		return []byte{TYPE_I64}
+	case "string":
+		return []byte{TYPE_I32, TYPE_I32}
 	}
 	e.errors = append(e.errors, fmt.Errorf("unknown type %q", typeName))
-	return ZERO
+	return []byte{ZERO}
 }
 
 func (e *Emmiter) startSection() (sectionId int) {

@@ -29,6 +29,7 @@ const (
 	IDENT
 	INT
 	FLOAT
+	STRING
 
 	// Keywords
 	FUNC
@@ -55,16 +56,17 @@ const (
 	NOT_EQ
 )
 
-var tokens = map[Type]string{
+var Tokens = map[Type]string{
 	EOF:     "EOF",
 	ILLEGAL: "ILLEGAL",
 
 	PROGRAM: "PROGRAM",
 
 	// Identifiers + literals
-	IDENT: "IDENT",
-	INT:   "INT",
-	FLOAT: "FLOAT",
+	IDENT:  "IDENT",
+	INT:    "INT",
+	FLOAT:  "FLOAT",
+	STRING: "STRING",
 
 	// Keywords
 	FUNC:   "FUNC",
@@ -92,14 +94,16 @@ var tokens = map[Type]string{
 	NOT_EQ: "!=",
 }
 
+// Print returns string name of token.Type
 func Print(tokenType Type) string {
-	tokenStr, found := tokens[tokenType]
+	tokenStr, found := Tokens[tokenType]
 	if !found {
 		return "unknown token type"
 	}
 	return tokenStr
 }
 
+// LookupIdent returns Token for ident
 func LookupIdent(ident string) Token {
 	switch ident {
 	case "fn":

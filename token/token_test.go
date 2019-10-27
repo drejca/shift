@@ -1,10 +1,14 @@
-package token
+package token_test
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/drejca/shift/token"
+)
 
 func TestPrintToken(t *testing.T) {
-	for tokType, tok := range tokens {
-		tokenStr := Print(tokType)
+	for tokType, tok := range token.Tokens {
+		tokenStr := token.Print(tokType)
 		if tokenStr != tok {
 			t.Errorf("token %d not found", tokType)
 		}
@@ -12,7 +16,7 @@ func TestPrintToken(t *testing.T) {
 }
 
 func TestPrintUnknownToken(t *testing.T) {
-	tokenStr := Print(UNKNOWN)
+	tokenStr := token.Print(token.UNKNOWN)
 	expected := "unknown token type"
 	if tokenStr != expected {
 		t.Errorf("expected %q got %q", expected, tokenStr)
@@ -22,20 +26,20 @@ func TestPrintUnknownToken(t *testing.T) {
 func TestLookupIdent(t *testing.T) {
 	tests := []struct {
 		ident       string
-		expectToken Token
+		expectToken token.Token
 	}{
-		{ident: "fn", expectToken: Token{Lit: "fn", Type: FUNC}},
-		{ident: "return", expectToken: Token{Lit: "return", Type: RETURN}},
-		{ident: "name", expectToken: Token{Lit: "name", Type: IDENT}},
-		{ident: "import", expectToken: Token{Lit: "import", Type: IMPORT}},
-		{ident: "if", expectToken: Token{Lit: "if", Type: IF}},
+		{ident: "fn", expectToken: token.Token{Lit: "fn", Type: token.FUNC}},
+		{ident: "return", expectToken: token.Token{Lit: "return", Type: token.RETURN}},
+		{ident: "name", expectToken: token.Token{Lit: "name", Type: token.IDENT}},
+		{ident: "import", expectToken: token.Token{Lit: "import", Type: token.IMPORT}},
+		{ident: "if", expectToken: token.Token{Lit: "if", Type: token.IF}},
 	}
 
 	for _, test := range tests {
-		tok := LookupIdent(test.ident)
+		tok := token.LookupIdent(test.ident)
 
 		if tok.Type != test.expectToken.Type {
-			t.Errorf("expected %q got %q", Print(test.expectToken.Type), Print(tok.Type))
+			t.Errorf("expected %q got %q", token.Print(test.expectToken.Type), token.Print(tok.Type))
 		}
 	}
 }

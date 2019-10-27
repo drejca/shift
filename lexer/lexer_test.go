@@ -13,11 +13,13 @@ func TestNextToken(t *testing.T) {
 fn Add(a i32, b i32) : i32 {
 	return a + b
 }~
-2 - 1
+2 - 1;
 a := 4 + 5
+a = a + 2
 f := 0.6
 import fn log(num i32)
 if a != f {}
+name := "shift"
 `
 
 	tests := []struct {
@@ -45,11 +47,17 @@ if a != f {}
 		{tokenType: token.INT, literal: "2"},
 		{tokenType: token.MINUS, literal: "-"},
 		{tokenType: token.INT, literal: "1"},
+		{tokenType: token.SEMICOLON, literal: ";"},
 		{tokenType: token.IDENT, literal: "a"},
 		{tokenType: token.INIT_ASSIGN, literal: ":="},
 		{tokenType: token.INT, literal: "4"},
 		{tokenType: token.PLUS, literal: "+"},
 		{tokenType: token.INT, literal: "5"},
+		{tokenType: token.IDENT, literal: "a"},
+		{tokenType: token.ASSIGN, literal: "="},
+		{tokenType: token.IDENT, literal: "a"},
+		{tokenType: token.PLUS, literal: "+"},
+		{tokenType: token.INT, literal: "2"},
 		{tokenType: token.IDENT, literal: "f"},
 		{tokenType: token.INIT_ASSIGN, literal: ":="},
 		{tokenType: token.FLOAT, literal: "0.6"},
@@ -66,6 +74,9 @@ if a != f {}
 		{tokenType: token.IDENT, literal: "f"},
 		{tokenType: token.LCURLY, literal: "{"},
 		{tokenType: token.RCURLY, literal: "}"},
+		{tokenType: token.IDENT, literal: "name"},
+		{tokenType: token.INIT_ASSIGN, literal: ":="},
+		{tokenType: token.STRING, literal: "shift"},
 		{tokenType: token.EOF, literal: string(rune(token.EOF))},
 	}
 

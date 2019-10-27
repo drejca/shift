@@ -10,24 +10,26 @@ import (
 
 var eof = rune(token.EOF)
 
+// Lexer holds lexer state
 type Lexer struct {
-	buf    *bufio.Reader
-	ident  bytes.Buffer
-	number bytes.Buffer
+	reader *bufio.Reader
+	buffer bytes.Buffer
 
 	pos      token.Position
 	curRune  rune
 	peekRune rune
 }
 
+// New returns new lexer
 func New(input io.Reader) *Lexer {
 	lex := &Lexer{
-		buf: bufio.NewReader(input),
-		pos: token.Position{Line: 1, Column: 1},
+		reader: bufio.NewReader(input),
+		pos:    token.Position{Line: 1, Column: 1},
 	}
 	return lex
 }
 
+// NextToken returns next token ends on token.EOF
 func (l *Lexer) NextToken() token.Token {
 	ch := l.read()
 
@@ -89,6 +91,8 @@ func (l *Lexer) NextToken() token.Token {
 		return l.Token(token.BANG, string(ch))
 	case '=':
 		return l.Token(token.ASSIGN, string(ch))
+	case '"':
+		return l.readString()
 	case eof:
 		return l.Token(token.EOF, string(ch))
 	default:
@@ -97,16 +101,16 @@ func (l *Lexer) NextToken() token.Token {
 }
 
 func (l *Lexer) skipNewLine() {
-	l.ident.Reset()
+	l.buffer.Reset()
 	ch := l.read()
 	if ch != '\n' {
 		l.unread()
 	}
-	l.ident.Reset()
+	l.buffer.Reset()
 }
 
 func (l *Lexer) skipWhitespace() {
-	l.ident.Reset()
+	l.buffer.Reset()
 	for {
 		ch := l.read()
 		if !isWhitespace(ch) {
@@ -117,23 +121,23 @@ func (l *Lexer) skipWhitespace() {
 }
 
 func (l *Lexer) readIdentifier() token.Token {
-	l.ident.Reset()
+	l.buffer.Reset()
 	for {
 		ch := l.read()
 		if !isLetter(ch) && !isDigit(ch) {
 			l.unread()
 			break
 		}
-		l.ident.WriteRune(ch)
+		l.buffer.WriteRune(ch)
 	}
-	tok := token.LookupIdent(l.ident.String())
+	tok := token.LookupIdent(l.buffer.String())
 	tok.Pos = l.pos
 	tok.Pos.Column = tok.Pos.Column - len(tok.Lit)
 	return tok
 }
 
 func (l *Lexer) readNumber() token.Token {
-	l.number.Reset()
+	l.buffer.Reset()
 	for {
 		ch := l.read()
 
@@ -145,14 +149,14 @@ func (l *Lexer) readNumber() token.Token {
 			l.unread()
 			break
 		}
-		l.number.WriteRune(ch)
+		l.buffer.WriteRune(ch)
 	}
-	tok := l.Token(token.INT, l.number.String())
+	tok := l.Token(token.INT, l.buffer.String())
 	return tok
 }
 
 func (l *Lexer) readFloat() token.Token {
-	l.number.WriteRune('.')
+	l.buffer.WriteRune('.')
 	for {
 		ch := l.read()
 
@@ -160,10 +164,30 @@ func (l *Lexer) readFloat() token.Token {
 			l.unread()
 			break
 		}
-		l.number.WriteRune(ch)
+		l.buffer.WriteRune(ch)
 	}
-	tok := l.Token(token.FLOAT, l.number.String())
+	tok := l.Token(token.FLOAT, l.buffer.String())
 	return tok
+}
+
+func (l *Lexer) readString() token.Token {
+	l.buffer.Reset()
+	for {
+		ch := l.read()
+
+		if ch == eof {
+			return l.Token(token.EOF, string(ch))
+		}
+
+		if ch == '"' {
+			break
+		}
+
+		l.buffer.WriteRune(ch)
+	}
+	tok := l.Token(token.STRING, l.buffer.String())
+	return tok
+
 }
 
 func (l *Lexer) Token(tokenType token.Type, literal string) token.Token {
@@ -180,13 +204,13 @@ func (l *Lexer) peek() rune {
 }
 
 func (l *Lexer) read() rune {
-	ch, _, _ := l.buf.ReadRune()
+	ch, _, _ := l.reader.ReadRune()
 	l.pos.Column++
 	return ch
 }
 
 func (l *Lexer) unread() {
-	l.buf.UnreadRune()
+	l.reader.UnreadRune()
 	l.pos.Column--
 }
 

@@ -20,8 +20,10 @@ const (
 	SECTION_TYPE   = 0x01
 	SECTION_IMPORT = 0x02
 	SECTION_FUNC   = 0x03
+	SECTION_MEMORY = 0x05
 	SECTION_EXPORT = 0x07
 	SECTION_CODE   = 0x0a
+	SECTION_DATA   = 0x0b
 
 	// Language Types
 	FUNC = 0x60
@@ -82,8 +84,10 @@ type Module struct {
 	typeSection     *TypeSection
 	importSection   *ImportSection
 	functionSection *FunctionSection
+	memorySection   *MemorySection
 	exportSection   *ExportSection
 	codeSection     *CodeSection
+	dataSection     *DataSection
 }
 
 func (m *Module) String() string {
@@ -104,6 +108,13 @@ func (m *Module) String() string {
 			out.WriteString(printFunctionSignature(node))
 			out.WriteString(printFunctionCode(m.codeSection, node.name))
 		}
+	}
+
+	if m.memorySection != nil {
+		out.WriteString(m.memorySection.String())
+	}
+	if m.dataSection != nil {
+		out.WriteString(m.dataSection.String())
 	}
 
 	out.WriteString("\n)")
@@ -395,6 +406,35 @@ func (n *NotEqual) String() string {
 	return out.String()
 }
 
+type MemorySection struct {
+	count   uint32
+	entries []*MemoryType
+}
+
+func (ms *MemorySection) sectionNode() {}
+func (ms *MemorySection) String() string {
+	var out bytes.Buffer
+	for _, memoryType := range ms.entries {
+		out.WriteString("\n	")
+		out.WriteString(memoryType.String())
+	}
+	return out.String()
+}
+
+type MemoryType struct {
+	flags         uint32
+	initialLength uint32
+	maximum       uint32
+}
+
+func (mt *MemoryType) String() string {
+	var out bytes.Buffer
+	out.WriteString(`(memory $memory (export "memory") `)
+	out.WriteString(strconv.Itoa(int(mt.flags)))
+	out.WriteString(`)`)
+	return out.String()
+}
+
 type ExportSection struct {
 	count   uint32
 	entries []*ExportEntry
@@ -435,6 +475,38 @@ func (c *ConstInt) String() string {
 	var out bytes.Buffer
 	out.WriteString("i32.const ")
 	out.WriteString(strconv.FormatInt(c.value, 10))
+	return out.String()
+}
+
+type DataSection struct {
+	count   uint32
+	entries []*DataSegment
+}
+
+func (ds *DataSection) sectionNode() {}
+func (ds *DataSection) String() string {
+	var out bytes.Buffer
+	for _, dataSegment := range ds.entries {
+		out.WriteString("\n	")
+		out.WriteString(dataSegment.String())
+	}
+	return out.String()
+}
+
+type DataSegment struct {
+	index  uint32
+	offset int32
+	size   uint32
+	data   []byte
+}
+
+func (ds *DataSegment) String() string {
+	var out bytes.Buffer
+	out.WriteString("(data (i32.const ")
+	out.WriteString(strconv.FormatInt(int64(ds.offset), 10))
+	out.WriteString(`) "`)
+	out.WriteString(string(ds.data))
+	out.WriteString(`")`)
 	return out.String()
 }
 

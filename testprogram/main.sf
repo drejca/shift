@@ -1,3 +1,20 @@
-fn Add(a i32, b i32) : i32 {
+import fn error(msg string)
+
+fn main() {
+	res := Calc(85, 25)
+	expected := 197
+	
+	if res != expected {
+		error("expected does not match result")
+	}
+}
+
+fn Calc(a i32, b i32) : i32 {
+	c := 2
+	c = c + a
+	return add(a, b) + c
+}
+
+fn add(a i32, b i32) : i32 {
 	return a + b
 }

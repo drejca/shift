@@ -1,3 +1,5 @@
+# bitbucket.org/sheran_gunasekera/leb128 v0.0.0-20140310100139-ab5288260bc3
+bitbucket.org/sheran_gunasekera/leb128
 # github.com/go-interpreter/wagon v0.4.0 => github.com/perlin-network/wagon v0.3.1-0.20180825141017-f8cb99b55a39
 github.com/go-interpreter/wagon/wasm
 github.com/go-interpreter/wagon/wasm/leb128

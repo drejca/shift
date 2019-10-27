@@ -64,6 +64,7 @@ func New(input io.Reader) *Parser {
 	p.registerPrefix(token.IDENT, p.parseIdentifier)
 	p.registerPrefix(token.INT, p.parseIntegerLiteral)
 	p.registerPrefix(token.FLOAT, p.parseFloatLiteral)
+	p.registerPrefix(token.STRING, p.parseStringLiteral)
 	p.registerPrefix(token.LPAREN, p.parseGroupedExpression)
 	p.registerPrefix(token.IF, p.parseIfExpression)
 
@@ -524,6 +525,11 @@ func (p *Parser) parseFloatLiteral() (ast.Expression, token.CompileError) {
 	}
 	lit.Value = value
 	return lit, nil
+}
+
+func (p *Parser) parseStringLiteral() (ast.Expression, token.CompileError) {
+	str := &ast.String{Token: p.curToken, Value: p.curToken.Lit}
+	return str, nil
 }
 
 func (p *Parser) expectToken(tokenType token.Type) bool {

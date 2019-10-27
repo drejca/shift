@@ -1,0 +1,14 @@
+import fn error(msg string)
+
+fn main() {
+    TestAdd()
+}
+
+fn TestAdd() {
+    res := 12 + 8
+    expected := 20
+
+    if res != expected {
+		error("expected does not match result")
+	}
+}

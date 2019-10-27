@@ -68,6 +68,14 @@ fn calc() {
 	a := (5 - 2)
 }
 `},
+		{input: `
+fn name() {
+	name := "shift"
+}
+`},
+		{input: `
+import fn error(msg string)
+`},
 	}
 
 	for _, test := range tests {
