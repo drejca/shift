@@ -1,12 +1,31 @@
 import fn error(msg string)
 
 fn main() {
-    TestAdd()
+    TestSummation()
+    TestSubtraction()
 }
 
-fn TestAdd() {
+fn TestSummation() {
     res := 12 + 8
     expected := 20
+
+    if res != expected {
+		error("expected does not match result")
+	}
+}
+
+fn TestSubtraction() {
+    res := 20 - 8
+    expected := 12
+
+    if res != expected {
+		error("expected does not match result")
+	}
+}
+
+fn TestMultiply() {
+    res := 2 * 8
+    expected := 16
 
     if res != expected {
 		error("expected does not match result")

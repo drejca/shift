@@ -83,6 +83,8 @@ func (l *Lexer) NextToken() token.Token {
 		return l.Token(token.PLUS, string(ch))
 	case '-':
 		return l.Token(token.MINUS, string(ch))
+	case '*':
+		return l.Token(token.ASTERISK, string(ch))
 	case '!':
 		if l.peek() == '=' {
 			l.read()

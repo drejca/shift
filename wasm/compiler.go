@@ -308,22 +308,24 @@ func (c *Compiler) compileInfixExpression(infixExpression *ast.InfixExpression) 
 	expressionOperations = c.compileExpression(infixExpression.Right)
 	operations = append(operations, expressionOperations...)
 
+	var operation Operation
+	var err error
+
 	switch infixExpression.Operator {
 	case "+":
-		operation, err := sumTypes(infixExpression.Left, infixExpression.Right)
-		c.handleError(err)
-		operations = append(operations, operation)
+		operation, err = sumTypes(infixExpression.Left, infixExpression.Right)
 	case "-":
-		operation, err := subtractTypes(infixExpression.Left, infixExpression.Right)
-		c.handleError(err)
-		operations = append(operations, operation)
+		operation, err = subtractTypes(infixExpression.Left, infixExpression.Right)
+	case "*":
+		operation, err = multiplyTypes(infixExpression.Left, infixExpression.Right)
 	case "!=":
-		operation, err := notEqual(infixExpression.Left, infixExpression.Right)
-		c.handleError(err)
-		operations = append(operations, operation)
+		operation, err = notEqual(infixExpression.Left, infixExpression.Right)
 	default:
 		c.handleError(fmt.Errorf("unknown operator %s", infixExpression.Operator))
+		return operations
 	}
+	c.handleError(err)
+	operations = append(operations, operation)
 	return operations
 }
 
@@ -442,6 +444,10 @@ func sumTypes(left ast.Node, right ast.Node) (Operation, error) {
 
 func subtractTypes(left ast.Node, right ast.Node) (Operation, error) {
 	return &Sub{}, nil
+}
+
+func multiplyTypes(left ast.Node, right ast.Node) (Operation, error) {
+	return &Multiply{}, nil
 }
 
 func notEqual(left ast.Node, right ast.Node) (Operation, error) {

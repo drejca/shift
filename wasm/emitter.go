@@ -204,6 +204,8 @@ func (e *Emmiter) Emit(node Node) error {
 		e.emit(I32_ADD)
 	case *Sub:
 		e.emit(I32_SUB)
+	case *Multiply:
+		e.emit(I32_MUL)
 	case *NotEqual:
 		e.emit(I32_NOT_EQUAL)
 	}

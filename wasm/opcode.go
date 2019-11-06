@@ -51,6 +51,7 @@ const (
 	// Numeric operators
 	I32_ADD       = 0x6a
 	I32_SUB       = 0x6b
+	I32_MUL       = 0x6c
 	I32_NOT_EQUAL = 0x47
 
 	// external_kind kind for import/export
@@ -393,6 +394,16 @@ func (s *Sub) operationNode() {}
 func (s *Sub) String() string {
 	var out bytes.Buffer
 	out.WriteString("i32.sub")
+	return out.String()
+}
+
+type Multiply struct {
+}
+
+func (m *Multiply) operationNode() {}
+func (m *Multiply) String() string {
+	var out bytes.Buffer
+	out.WriteString("i32.mul")
 	return out.String()
 }
 

@@ -13,8 +13,9 @@ import (
 const (
 	_ int = iota
 	LOWEST
-	EQUALS // =, :=, ==, !=
-	SUM    // +, -
+	EQUALS  // =, :=, ==, !=
+	SUM     // +, -
+	PRODUCT // *, /
 	CALL
 )
 
@@ -24,6 +25,7 @@ var precedences = map[token.Type]int{
 	token.NOT_EQ:      EQUALS,
 	token.PLUS:        SUM,
 	token.MINUS:       SUM,
+	token.ASTERISK:    PRODUCT,
 	token.RPAREN:      LOWEST,
 	token.LPAREN:      CALL,
 }
@@ -71,6 +73,7 @@ func New(input io.Reader) *Parser {
 	p.infixParseFns = make(map[token.Type]infixParseFn)
 	p.registerInfix(token.PLUS, p.parseInfixExpression)
 	p.registerInfix(token.MINUS, p.parseInfixExpression)
+	p.registerInfix(token.ASTERISK, p.parseInfixExpression)
 	p.registerInfix(token.INIT_ASSIGN, p.parseInitAssignExpression)
 	p.registerInfix(token.ASSIGN, p.parseAssignmentExpression)
 	p.registerInfix(token.NOT_EQ, p.parseInfixExpression)
@@ -387,7 +390,7 @@ func (p *Parser) parseInitAssignExpression(expression ast.Expression) (ast.Expre
 func (p *Parser) parseExpression(precedence int) (ast.Expression, token.CompileError) {
 	prefix := p.prefixParseFns[p.curToken.Type]
 	if prefix == nil {
-		return nil, p.parseError(fmt.Errorf("illegal symbol %s", p.curToken.Lit), p.curToken, p.curToken.Pos.Column)
+		return nil, p.parseError(fmt.Errorf("illegal symbol %s", p.curToken.Lit), p.curToken, p.curToken.Pos.Column-1)
 	}
 	leftExp, err := prefix()
 	if err != nil {
@@ -397,7 +400,7 @@ func (p *Parser) parseExpression(precedence int) (ast.Expression, token.CompileE
 	for !p.peekTokenIs(token.SEMICOLON) && precedence < p.peekPrecedence() {
 		infix := p.infixParseFns[p.peekToken.Type]
 		if infix == nil {
-			return leftExp, p.parseError(fmt.Errorf("illegal symbol %s", p.curToken.Lit), p.curToken, p.curToken.Pos.Column)
+			return leftExp, p.parseError(fmt.Errorf("illegal symbol %s", p.curToken.Lit), p.curToken, p.curToken.Pos.Column-1)
 		}
 		p.nextToken()
 

@@ -50,6 +50,7 @@ const (
 	// Operators
 	PLUS
 	MINUS
+	ASTERISK
 	ASSIGN
 	INIT_ASSIGN
 	BANG
@@ -87,6 +88,7 @@ var Tokens = map[Type]string{
 	// Operators
 	PLUS:        "+",
 	MINUS:       "-",
+	ASTERISK:    "*",
 	ASSIGN:      "=",
 	INIT_ASSIGN: ":=",
 	BANG:        "!",

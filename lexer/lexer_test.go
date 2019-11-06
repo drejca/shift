@@ -91,6 +91,18 @@ func TestNextToken(t *testing.T) {
 			},
 		},
 		{
+			name:  "assignment with multiply expression",
+			input: `a = a * 2`,
+			outputs: []output{
+				{tokenType: token.IDENT, literal: "a"},
+				{tokenType: token.ASSIGN, literal: "="},
+				{tokenType: token.IDENT, literal: "a"},
+				{tokenType: token.ASTERISK, literal: "*"},
+				{tokenType: token.INT, literal: "2"},
+				{tokenType: token.EOF, literal: string(rune(token.EOF))},
+			},
+		},
+		{
 			name:  "assignment with initialization floating point number",
 			input: `f := 0.6`,
 			outputs: []output{

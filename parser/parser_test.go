@@ -69,6 +69,11 @@ fn calc() {
 }
 `},
 		{input: `
+fn multiply() {
+	a := (5 * 2)
+}
+`},
+		{input: `
 fn name() {
 	name := "shift"
 }
@@ -104,7 +109,7 @@ func TestParseErrors(t *testing.T) {
 		}},
 		{input: `fn A() {return ~2}`, parseErr: parser.ParseError{
 			Err: errors.New("illegal symbol ~"),
-			Pos: token.Position{Line: 1, Column: 16},
+			Pos: token.Position{Line: 1, Column: 15},
 		}},
 		{input: `fn A() {return 5 + (2 - 1}`, parseErr: parser.ParseError{
 			Err: errors.New("missing )"),
